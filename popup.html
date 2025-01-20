@@ -1,0 +1,22 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <style>
+    body { width: 300px; padding: 10px; }
+    #searchBar { width: 100%; margin-bottom: 10px; display: none; }
+    #toggleButton { width: 100%; }
+  </style>
+</head>
+<body>
+  <form id="searchForm">
+    <input type="text" id="searchBar" placeholder="Search...">
+  </form>
+  <button id="toggleButton">Activate</button>
+  <div class="navigation-controls">
+    <button id="prevButton">← Previous</button>
+    <span id="position-counter">1/1</span>
+    <button id="nextButton">Next →</button>
+  </div>  
+  <script src="popup.js"></script>
+</body>
+</html>

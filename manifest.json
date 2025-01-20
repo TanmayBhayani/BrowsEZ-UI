@@ -1,0 +1,27 @@
+{
+  "manifest_version": 2,
+  "name": "Find",
+  "version": "1.0",
+  "description": "A search bar to find what you want in a website",
+  "permissions": [
+    "activeTab",
+    "tabs",
+    "storage",
+    "http://127.0.0.1/*",
+    "https://127.0.0.1/*"
+  ],
+  "background": {
+    "scripts": ["background.js"],
+    "persistent": false
+  },
+  "browser_action": {
+    "default_popup": "popup.html",
+    "default_title": "Find"
+  },
+  "content_scripts": [
+    {
+      "matches": ["<all_urls>"],
+      "js": ["content.js"]
+    }
+  ]
+}
