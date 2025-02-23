@@ -1,3 +1,104 @@
+// Initialize session when extension is installed or updated
+chrome.runtime.onInstalled.addListener(() => {
+  initializeSession();
+});
+
+// Initialize session when browser starts
+chrome.runtime.onStartup.addListener(() => {
+  initializeSession();
+});
+
+function initializeSession() {
+    fetch('http://127.0.0.1:5000/initialize_session', {
+        method: 'POST',
+        credentials: 'include', 
+        headers: {
+            'Content-Type': 'application/json'
+        }
+    })
+    .then(response => {
+        // Log cookies from response
+        console.log('Response cookies:', document.cookie);
+        console.log('Response headers:', response.headers);
+        return response.json();
+    })
+    .then(data => {
+        console.log('Session initialized:', data);
+        
+        // Check all cookies
+        chrome.cookies.getAll({
+            domain: "127.0.0.1"
+        }, (cookies) => {
+            console.log('All cookies:', cookies);
+        });
+    })
+    .catch(error => {
+        console.error('Session initialization failed:', error);
+        setTimeout(initializeSession, 5000);
+    });
+
+
+}
+// Listen for extension reload or browser restart
+chrome.runtime.onSuspend.addListener(() => {
+  // Optional: Perform cleanup if needed before extension is unloaded
+  console.log('Extension being unloaded, session will persist via cookie');
+});
+
+chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
+    if (request.action === "sendHTML") {
+      fetch('http://127.0.0.1:5000/receive_html', {
+        method: 'POST',
+        credentials: 'include',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          html: request.html,
+          tabId: sender.tab.id
+        })
+      })
+      .then(response => response.json())
+      .then(data => sendResponse(data))
+      .catch(error => console.error('Error:', error));
+      return true; // Required for async response
+    }
+    
+    if (request.action === "find") {
+      const searchParams = new URLSearchParams({
+        searchString: request.searchString
+      });
+      
+      fetch(`http://127.0.0.1:5000/search?${searchParams.toString()}`, {
+        method: 'GET',
+        credentials: 'include',
+        headers: {
+          'Content-Type': 'application/json',
+          'tabId': request.tabId
+        }
+      })
+      .then(response => response.json())
+      .then(data => {
+        // Send search results to content script
+        chrome.tabs.sendMessage(request.tabId, {
+          action: "highlightElements",
+          elements: data.searchResults.metadatas[0]
+        }, () => {
+          console.log('Message sent with tabId:', request.tabId);
+        });
+        sendResponse(data);
+      })
+      .catch(error => console.error('Error:', error));
+      return true;
+    }  });
+
+    chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
+      if (request.action === "getTabId") {
+          sendResponse(sender.tab.id);
+      }
+  });
+  
+
 // chrome.runtime.onMessage.addListener(function(request, sender, sendResponse) {
 //     if (request.action === "sendHTML") {
 //         chrome.storage.local.get('isActive', function(data) {

@@ -18,19 +18,21 @@ document.addEventListener('DOMContentLoaded', function() {
     });
   });
 
-  searchForm.addEventListener('submit', function(e) {
-    e.preventDefault();
-    const searchString = searchBar.value.trim();
-    console.log("Search string:", searchString);
-    if (searchString) {
+searchForm.addEventListener('submit', function(e) {
+  e.preventDefault();
+  const searchString = searchBar.value.trim();
+  console.log("Search string:", searchString);
+  if (searchString) {
       chrome.tabs.query({active: true, currentWindow: true}, function(tabs) {
-        if (tabs && tabs.length > 0) {
-          chrome.tabs.sendMessage(tabs[0].id, {action: "search", searchString: searchString});
-        }
+          chrome.runtime.sendMessage({
+              action: "find", 
+              searchString: searchString, 
+              tabId: tabs[0].id
+          });
       });
       searchBar.value = ''; // Clear the search bar
-    }
-  });
+  }
+});
 
   function updateUI(isActive) {
     toggleButton.textContent = isActive ? 'Deactivate' : 'Activate';

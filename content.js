@@ -10,10 +10,6 @@ style.textContent = `
 `;
 document.head.appendChild(style);
 
-// Add session management functions
-function storeSessionId(sessionId) {
-  sessionStorage.setItem('currentSessionId', sessionId);
-}
 
 async function cleanupSession() {
   const sessionId = sessionStorage.getItem('currentSessionId');
@@ -29,8 +25,19 @@ async function cleanupSession() {
   }
 }
 
+let rng;
+
 function generateUniqueId() {
-  return 'el_' + Math.random().toString(36).substr(2, 9);
+  return 'el_' + Math.floor(rng() * 1000000000).toString(36);
+}
+
+function processPage() {
+  chrome.runtime.sendMessage({action: "getTabId"}, (tabId) => {
+      rng = new Math.seedrandom(tabId.toString());
+      addDataAttributesToElements(document.body);
+      let html = document.documentElement.outerHTML;
+      sendHTMLToBackend(html);
+  });
 }
 
 function addDataAttributesToElements(element, prefix = '') {
@@ -43,41 +50,24 @@ function addDataAttributesToElements(element, prefix = '') {
     }
   }
 }
-
+function sendHTMLToBackend(html) {
+  chrome.runtime.sendMessage({
+    action: "sendHTML",
+    html: html
+  });
+}
 
 chrome.runtime.onMessage.addListener(function(request, sender, sendResponse) {
-  if(request.action === "search") {
-    const currentSessionId = sessionStorage.getItem('currentSessionId');
-    const searchParams = new URLSearchParams({
-      searchString: request.searchString
-    });
-
-    fetch(`http://127.0.0.1:5000/search?${searchParams.toString()}`, {
-      method: 'GET',
-      headers: {
-        'Content-Type': 'application/json',
-        'id': currentSessionId
-      }
-    })
-    .then(response => response.json())
-    .then(data => {
-      console.log('Search results:', data);
-      if (data.searchResults) {
-        highlightElements(data.searchResults);
-      } else {
-        console.log('No search results found');
-      }
-    })
-    .catch((error) => {
-      console.error('Error sending search:', error);
-    });
-  } else if (request.action === "next") {
+  console.log('Message received in content script:', request);
+  if (request.action === "highlightElements") {
+    highlightElements(request.elements);
+  }
+  else if (request.action === "next") {
     navigateNext();
   } else if (request.action === "previous") {
     navigatePrevious();
   }
 });
-
 function highlightElements(elements) {
   // Remove any existing highlights
   removeAllHighlights();
@@ -132,34 +122,6 @@ function navigatePrevious() {
     highlightCurrentElement();
     updatePosition();
   }
-}
-function sendHTMLToBackend(html) {
-  const currentSessionId = sessionStorage.getItem('currentSessionId');
-  let body = { html: html };
-  // body = JSON.stringify({ html: html })
-  if(currentSessionId) {
-    body.id = currentSessionId;
-  }
-  body  = JSON.stringify(body);
-  console.log("Body:", body);
-  console.log("Sending HTML to backend:");
-  fetch('http://127.0.0.1:5000/receive_html', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-    },
-    body: body
-  })
-  .then(response => response.json())
-  .then(data => {
-    storeSessionId(data.session_id);
-  });
-}
-
-function processPage() {
-  addDataAttributesToElements(document.body);
-  let html = document.documentElement.outerHTML;
-  sendHTMLToBackend(html);
 }
 // Remove the DOMContentLoaded wrapper and run directly
 processPage();
