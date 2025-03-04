@@ -67,6 +67,13 @@ chrome.runtime.onMessage.addListener(function(request, sender, sendResponse) {
   } else if (request.action === "previous") {
     navigatePrevious();
   }
+  else if (request.action === "getPageHTML") {
+    addDataAttributesToElements(document.body);
+    const html = document.documentElement.outerHTML;
+    sendResponse({ html: html });
+    return true;
+  }
+  return true;
 });
 function highlightElements(elements) {
   // Remove any existing highlights
