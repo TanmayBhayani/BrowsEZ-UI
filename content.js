@@ -53,7 +53,9 @@ function addDataAttributesToElements(element, prefix = '') {
 function sendHTMLToBackend(html) {
   chrome.runtime.sendMessage({
     action: "sendHTML",
-    html: html
+    html: html,
+    // Send URL of the current page
+    url: window.location.href
   });
 }
 
@@ -130,8 +132,13 @@ function navigatePrevious() {
     updatePosition();
   }
 }
-// Remove the DOMContentLoaded wrapper and run directly
-processPage();
+
+document.addEventListener('DOMContentLoaded', function() {
+  processPage();
+});
+
+
+
 
 // Add cleanup event listeners
 window.addEventListener('beforeunload', cleanupSession);
