@@ -25,19 +25,22 @@ async function cleanupSession() {
   }
 }
 
-let rng;
+let rng = new Math.seedrandom(Date.now().toString());;
 
 function generateUniqueId() {
   return 'el_' + Math.floor(rng() * 1000000000).toString(36);
 }
 
-function processPage() {
-  chrome.runtime.sendMessage({action: "getTabId"}, (tabId) => {
-      rng = new Math.seedrandom(tabId.toString());
-      addDataAttributesToElements(document.body);
-      let html = document.documentElement.outerHTML;
-      sendHTMLToBackend(html);
-  });
+async function processPage() {
+  try {
+    const tabId = await chrome.runtime.sendMessage({action: "getTabId"});
+    rng = new Math.seedrandom(tabId.toString());
+    addDataAttributesToElements(document.body);
+    let html = document.documentElement.outerHTML;
+    sendHTMLToBackend(html);
+  } catch (error) {
+    console.error("Error getting tab ID:", error);
+  }
 }
 
 function addDataAttributesToElements(element, prefix = '') {
@@ -73,6 +76,14 @@ chrome.runtime.onMessage.addListener(function(request, sender, sendResponse) {
     addDataAttributesToElements(document.body);
     const html = document.documentElement.outerHTML;
     sendResponse({ html: html });
+    return true;
+  }
+  else if (request.action === "sendHTML") {
+    // The content script already has the DOM context
+    addDataAttributesToElements(document.body);
+    const html = document.documentElement.outerHTML;
+    sendHTMLToBackend(html);
+    sendResponse({ success: true });
     return true;
   }
   return true;
@@ -133,9 +144,12 @@ function navigatePrevious() {
   }
 }
 
-document.addEventListener('DOMContentLoaded', function() {
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', processPage);
+} else {
+  // Document is already loaded
   processPage();
-});
+}
 
 
 

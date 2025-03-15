@@ -1,12 +1,13 @@
-// Store active domains locally as a Set for O(1) operations
-let activeDomains = new Set();
+// Store active domains locally as an Array for storage compatibility
+let activeDomains = [];
+
 // Check if current domain is active
 function isDomainActive(url) {
     if (!url) return false;
     try {
       const domain = new URL(url).hostname;
-      // Modified to work with Set
-      return Array.from(activeDomains).some(activeDomain => domain.includes(activeDomain));
+      // Use array method some() to check if domain includes any active domain
+      return activeDomains.some(activeDomain => domain.includes(activeDomain));
     } catch (e) {
       return false;
     }
@@ -14,16 +15,16 @@ function isDomainActive(url) {
 
 // Initialize session and load domains when extension starts
 chrome.runtime.onInstalled.addListener(() => {
-  //First check if we have active domains in chrome storage, if not set chrome storage to empty set
+  //First check if we have active domains in chrome storage, if not set chrome storage to empty array
   chrome.storage.local.get('activeDomains', data => {
     if (data.activeDomains) {
       activeDomains = data.activeDomains;
     } 
     else {
-      chrome.storage.local.set({ activeDomains: new Set() });
+      chrome.storage.local.set({ activeDomains: [] });
     }
   });
-  initializeSession()
+  initializeSession();
 });
 
 // Initialize session when browser starts
@@ -33,10 +34,10 @@ chrome.runtime.onStartup.addListener(() => {
       activeDomains = data.activeDomains;
     } 
     else {
-      chrome.storage.local.set({ activeDomains: new Set() });
+      chrome.storage.local.set({ activeDomains: [] });
     }
   });
-  initializeSession()
+  initializeSession();
 });
 
 // Check each tab when it's updated
@@ -51,181 +52,195 @@ chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
         
         // If domain is active, fetch the HTML
         if (isActive) {
-          chrome.tabs.sendMessage(tabId, { action: "getPageHTML" }, response => {
-            if (response && response.html) {
-              sendHTMLToServer(response.html, tabId);
-            }
-          });
+          chrome.tabs.sendMessage(tabId, { action: "getPageHTML" })
+            .then(response => {
+              if (response && response.html) {
+                sendHTMLToServer(response.html, tabId);
+              }
+            })
+            .catch(error => console.error("Error sending message:", error));
         }
       }
     });
   }
 });
 
-function initializeSession(retryCount = 0) {
-    return fetch('http://127.0.0.1:5000/initialize_session', {
-        method: 'POST',
-        credentials: 'include', 
-        headers: {
-            'Content-Type': 'application/json'
-        }
-    })
-    .then(response => {
-        // Log cookies from response
-        console.log('Response cookies:', document.cookie);
+async function initializeSession(retryCount = 0) {
+    try {
+        const response = await fetch('http://127.0.0.1:5000/initialize_session', {
+            method: 'POST',
+            credentials: 'include', 
+            headers: {
+                'Content-Type': 'application/json'
+            }
+        });
+        
+        // Log response details
         console.log('Response headers:', response.headers);
-        return response.json();
-    })
-    .then(data => {
+        const data = await response.json();
         console.log('Session initialized:', data);
       
         // Check all cookies
-        chrome.cookies.getAll({
+        const cookies = await chrome.cookies.getAll({
             domain: "127.0.0.1"
-        }, (cookies) => {
-            console.log('All cookies:', cookies);
         });
-    })
-    .catch(error => {
+        console.log('All cookies:', cookies);
+        return data;
+    } catch (error) {
         console.error('Session initialization failed:', error);
         if(retryCount < 3) {
             console.log('Retrying session initialization...');
-            setTimeout(initializeSession(retryCount+1), 5000);
+            await new Promise(resolve => setTimeout(resolve, 5000));
+            return initializeSession(retryCount+1);
         }
         return Promise.reject(error);
-    });
+    }
 }
-// Listen for extension reload or browser restart
-chrome.runtime.onSuspend.addListener(() => {
-  // Optional: Perform cleanup if needed before extension is unloaded
-  console.log('Extension being unloaded, session will persist via cookie');
-});
 
-function sendHTMLToServer(html, tabId) {
-  return fetch('http://127.0.0.1:5000/receive_html', {
-    method: 'POST',
-    credentials: 'include',
-    headers: {
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({
-      html: html,
-      tabId: tabId
-    })
-  })
-  .then(response => {
+async function sendHTMLToServer(html, tabId) {
+  try {
+    const response = await fetch('http://127.0.0.1:5000/receive_html', {
+      method: 'POST',
+      credentials: 'include',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        html: html,
+        tabId: tabId
+      })
+    });
+    
     if (response.status === 401) {
-      // throw new Error('Unauthorized');
       console.log('Unauthorized');
-      throw new Error('Unauthorized');
+      await initializeSession();
+      return sendHTMLToServer(html, tabId);
     }
-    return response.json();
-  })
-  .then(data => {
+    
+    const data = await response.json();
     console.log('HTML sent to server:', data);
-  })// catch Unauthorized error
-  .catch(error => {
+    return data;
+  } catch (error) {
     if (error.message === 'Unauthorized') {
-      initializeSession();
-      sendHTMLToServer(html, tabId);
-    }
-    else {
+      await initializeSession();
+      return sendHTMLToServer(html, tabId);
+    } else {
       // Handle other errors
       console.error('Error sending HTML to server:', error);
+      throw error;
     }
-  })
-  
+  }
 }
 
-function searchToServer(searchString, tabId) {
+async function searchToServer(searchString, tabId) {
   const searchParams = new URLSearchParams({
     searchString: searchString
   });
   
-  return fetch(`http://127.0.0.1:5000/search?${searchParams.toString()}`, {
-    method: 'GET',
-    credentials: 'include',
-    headers: {
-      'Content-Type': 'application/json',
-      'tabId': tabId
-    }
-  })
-  .then(response => {
+  try {
+    const response = await fetch(`http://127.0.0.1:5000/search?${searchParams.toString()}`, {
+      method: 'GET',
+      credentials: 'include',
+      headers: {
+        'Content-Type': 'application/json',
+        'tabId': tabId.toString()
+      }
+    });
+    
     if (response.status === 401 || response.status === 404) {
       throw new Error('Unauthorized');
     }
-    return response.json();
-  }).then(data => {
+    
+    const data = await response.json();
     // Send search results to content script
-    chrome.tabs.sendMessage(tabId, {
+    await chrome.tabs.sendMessage(tabId, {
       action: "highlightElements",
       elements: data.searchResults.metadatas[0]
-    }, () => {
-      console.log('Message sent with tabId:', tabId);
     });
-  })
-  .catch(async (error) => {
+    console.log('Message sent with tabId:', tabId);
+    return data;
+  } catch (error) {
     if (error.message === 'Unauthorized') {
       await initializeSession();
-      const resp = await chrome.tabs.sendMessage(tabId, { action: "getPageHTML" })
-      if (resp && resp.html)
-      {
+      const resp = await chrome.tabs.sendMessage(tabId, { action: "getPageHTML" });
+      if (resp && resp.html) {
         await sendHTMLToServer(resp.html, tabId);
-        await searchToServer(searchString, tabId);
+        return searchToServer(searchString, tabId);
       }
-    }
-    else {
+    } else {
       console.error('Error searching on server:', error);
+      throw error;
     }
-  });
+  }
 }
 
 function addActiveDomain(domain) {
   chrome.storage.local.get('activeDomains', data => {
-    if (data.activeDomains) {
-      data.activeDomains.add(domain);
-      chrome.storage.local.set({ activeDomains: data.activeDomains });
-    } else {
-      chrome.storage.local.set({ activeDomains: new Set([domain]) });
-    }
-  });
-}
-function removeActiveDomain(domain) {
-  chrome.storage.local.get('activeDomains', data => {
-    if (data.activeDomains) {
-      data.activeDomains.delete(domain);
-      chrome.storage.local.set({ activeDomains: data.activeDomains });
+    let domains = data.activeDomains || [];
+    
+    // Only add if not already in the array
+    if (!domains.includes(domain)) {
+      domains.push(domain);
+      chrome.storage.local.set({ activeDomains: domains });
+      // Update the local array
+      activeDomains = domains;
     }
   });
 }
 
+function removeActiveDomain(domain) {
+  chrome.storage.local.get('activeDomains', data => {
+    if (data.activeDomains) {
+      // Explicitly handle empty string case if needed
+      const domains = domain === '' 
+        ? data.activeDomains.filter(d => d !== '')
+        : data.activeDomains.filter(d => d !== domain);
+        
+      chrome.storage.local.set({ activeDomains: domains });
+      // Update the local array
+      activeDomains = domains;
+    }
+  });
+}
+
+// Message listener for MV3
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   if (request.action === "sendHTML") {
     if (isDomainActive(sender.tab.url)) {
-      sendHTMLToServer(request.html, sender.tab.id);
+      sendHTMLToServer(request.html, sender.tab.id)
+        .then(result => sendResponse(result))
+        .catch(error => sendResponse({ error: error.message }));
       return true; // Required for async response
     }
     return false;
   }
   
   if (request.action === "find") {
-    if (isDomainActive(sender.tab.url)) {
+    if (isDomainActive(request.tabUrl)) {
       searchToServer(request.searchString, request.tabId)
+        .then(result => sendResponse(result))
+        .catch(error => sendResponse({ error: error.message }));
       return true;
     }
     return false;
   }
+  
   if (request.action === "getTabId") {
-      sendResponse(sender.tab.id);
+    sendResponse(sender.tab.id);
+    return true;
   }
+  
   if (request.action === "addActiveDomain") {
-    // check if authenticated
-      addActiveDomain(request.domain);
+    addActiveDomain(request.domain);
+    sendResponse({ success: true });
     return true;
   }
   
   if (request.action === "removeActiveDomain") {
     removeActiveDomain(request.domain);
+    sendResponse({ success: true });
     return true;
   }
-  });
+  
+  return false;
+});

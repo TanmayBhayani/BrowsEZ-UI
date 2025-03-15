@@ -35,23 +35,13 @@ document.addEventListener('DOMContentLoaded', function() {
           domain: domain
         });
         
-        // Get the page HTML
-        const response = await chrome.tabs.sendMessage(tab.id, { action: "getPageHTML" });
-        
-        // Send HTML to server if available
-        if (response && response.html) {
-          await chrome.runtime.sendMessage({
-            action: "sendHTML",
-            html: response.html,
-            tabId: tab.id
-          });
-        }
+        await chrome.tabs.sendMessage(tab.id, { action: "sendHTML" });
       } else {
         // If deactivating, remove domain from active list
         const domain = new URL(tab.url).hostname;
         await chrome.runtime.sendMessage({
           action: "removeActiveDomain",
-          domains: domain
+          domain: domain
         });
       }
       // Update the UI based on new state
@@ -60,21 +50,30 @@ document.addEventListener('DOMContentLoaded', function() {
       console.error("Error in toggle action:", e);
     }
   });
-searchForm.addEventListener('submit', function(e) {
-  e.preventDefault();
-  const searchString = searchBar.value.trim();
-  console.log("Search string:", searchString);
-  if (searchString) {
-      chrome.tabs.query({active: true, currentWindow: true}, function(tabs) {
-          chrome.runtime.sendMessage({
-              action: "find", 
-              searchString: searchString, 
-              tabId: tabs[0].id
-          });
-      });
-      searchBar.value = ''; // Clear the search bar
-  }
-});
+  searchForm.addEventListener('submit', async function(e) {
+    e.preventDefault();
+    const searchString = searchBar.value.trim();
+    console.log("Search string:", searchString);
+    
+    if (searchString) {
+      try {
+        // Get the active tab
+        const [tab] = await chrome.tabs.query({active: true, currentWindow: true});
+        
+        // Send the message to the background script
+        await chrome.runtime.sendMessage({
+          action: "find", 
+          searchString: searchString, 
+          tabId: tab.id,
+          tabUrl: tab.url
+        });
+        
+        searchBar.value = ''; // Clear the search bar
+      } catch (error) {
+        console.error("Error during search:", error);
+      }
+    }
+  });
 
   function updateUI(isActive) {
     toggleButton.textContent = isActive ? 'Deactivate' : 'Activate';
