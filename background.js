@@ -6,8 +6,11 @@ function isDomainActive(url) {
     if (!url) return false;
     try {
       const domain = new URL(url).hostname;
-      // Use array method some() to check if domain includes any active domain
-      return activeDomains.some(activeDomain => domain.includes(activeDomain));
+      // Check if domain matches any active domain or is included in any active domain
+      return activeDomains.some(activeDomain => 
+        domain === activeDomain || 
+        (activeDomain !== "" && domain.includes(activeDomain))
+      );
     } catch (e) {
       return false;
     }
@@ -25,6 +28,7 @@ chrome.runtime.onInstalled.addListener(() => {
     }
   });
   initializeSession();
+  cleanupOrphanedTabRecords();
 });
 
 // Initialize session when browser starts
@@ -38,6 +42,7 @@ chrome.runtime.onStartup.addListener(() => {
     }
   });
   initializeSession();
+  cleanupOrphanedTabRecords();
 });
 
 // Check each tab when it's updated
@@ -63,6 +68,18 @@ chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
       }
     });
   }
+});
+
+// Clean up tab data when a tab is closed
+chrome.tabs.onRemoved.addListener((tabId) => {
+  // Remove tab-specific data from storage
+  chrome.storage.local.remove(`tab_${tabId}_isActive`, () => {
+    if (chrome.runtime.lastError) {
+      console.error(`Error removing tab_${tabId}_isActive:`, chrome.runtime.lastError);
+    } else {
+      console.log(`Cleaned up data for tab ${tabId}`);
+    }
+  });
 });
 
 async function initializeSession(retryCount = 0) {
@@ -200,6 +217,37 @@ function removeActiveDomain(domain) {
       // Update the local array
       activeDomains = domains;
     }
+  });
+}
+
+// Function to clean up orphaned tab records
+function cleanupOrphanedTabRecords() {
+  // Get all keys from storage
+  chrome.storage.local.get(null, (items) => {
+    // Get all open tabs
+    chrome.tabs.query({}, (tabs) => {
+      const openTabIds = tabs.map(tab => tab.id);
+      
+      // Check all storage keys
+      Object.keys(items).forEach(key => {
+        // If the key matches our tab pattern
+        if (key.match(/^tab_\d+_isActive$/)) {
+          // Extract the tab ID from the key
+          const tabId = parseInt(key.split('_')[1]);
+          
+          // If this tab ID is not in the list of open tabs, remove it
+          if (!openTabIds.includes(tabId)) {
+            chrome.storage.local.remove(key, () => {
+              if (chrome.runtime.lastError) {
+                console.error(`Error removing orphaned record ${key}:`, chrome.runtime.lastError);
+              } else {
+                console.log(`Cleaned up orphaned record for tab ${tabId}`);
+              }
+            });
+          }
+        }
+      });
+    });
   });
 }
 
