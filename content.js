@@ -36,8 +36,7 @@ async function processPage() {
     const tabId = await chrome.runtime.sendMessage({action: "getTabId"});
     rng = new Math.seedrandom(tabId.toString());
     addDataAttributesToElements(document.body);
-    let html = document.documentElement.outerHTML;
-    sendHTMLToBackend(html);
+    // HTML sending is now handled by the background script when requested
   } catch (error) {
     console.error("Error getting tab ID:", error);
   }
@@ -57,7 +56,6 @@ function sendHTMLToBackend(html) {
   chrome.runtime.sendMessage({
     action: "sendHTML",
     html: html,
-    // Send URL of the current page
     url: window.location.href
   });
 }
@@ -72,7 +70,13 @@ chrome.runtime.onMessage.addListener(function(request, sender, sendResponse) {
   } else if (request.action === "previous") {
     navigatePrevious();
   }
+  else if (request.action === "removeHighlights") {
+    removeAllHighlights();
+    highlightedElements = [];
+    currentHighlightIndex = 0;
+  }
   else if (request.action === "getPageHTML") {
+    // When background.js requests the HTML, we prepare and send it
     addDataAttributesToElements(document.body);
     const html = document.documentElement.outerHTML;
     sendResponse({ html: html });
@@ -150,9 +154,6 @@ if (document.readyState === 'loading') {
   // Document is already loaded
   processPage();
 }
-
-
-
 
 // Add cleanup event listeners
 window.addEventListener('beforeunload', cleanupSession);

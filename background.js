@@ -1,3 +1,5 @@
+// htmlProcessingStatus: 'not_sent', 'processing', 'ready', 'error'
+// searchStatus: 'idle', 'searching', 'showing_results', 'error'
 // Store active domains locally as an Array for storage compatibility
 let activeDomains = [];
 
@@ -26,7 +28,11 @@ chrome.runtime.onInstalled.addListener(() => {
     else {
       chrome.storage.local.set({ activeDomains: [] });
     }
+    
+    // After loading active domains, initialize all tab states
+    initializeAllTabStates();
   });
+  
   initializeSession();
   cleanupOrphanedTabRecords();
 });
@@ -40,31 +46,108 @@ chrome.runtime.onStartup.addListener(() => {
     else {
       chrome.storage.local.set({ activeDomains: [] });
     }
+    
+    // After loading active domains, initialize all tab states
+    initializeAllTabStates();
   });
+  
   initializeSession();
   cleanupOrphanedTabRecords();
 });
 
+// Function to initialize all tab states based on active domains
+function initializeAllTabStates() {
+  chrome.tabs.query({}, (tabs) => {
+    tabs.forEach(tab => {
+      if (tab.url) {
+        try {
+          const isActive = isDomainActive(tab.url);
+          
+          // Create default state for the tab
+          const defaultState = {
+            isActive: isActive,
+            htmlProcessingStatus: 'not_sent',
+            lastProcessedHTML: null,
+            searchState: {
+              lastSearch: null,
+              currentPosition: 0,
+              totalResults: 0,
+              searchStatus: 'idle'
+            }
+          };
+          
+          // Store the default state
+          chrome.storage.session.set({ [`tab_${tab.id}_state`]: defaultState });
+          
+          // If domain is active, we should request HTML
+          if (isActive) {
+            // Give the content script time to initialize
+            setTimeout(() => {
+              chrome.tabs.sendMessage(tab.id, { action: "sendHTML" })
+                .catch(err => console.log(`Could not send message to tab ${tab.id}:`, err));
+            }, 1000);
+          }
+        } catch (e) {
+          console.error("Error initializing tab state:", e);
+        }
+      }
+    });
+  });
+}
+
 // Check each tab when it's updated
 chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
+  // Only process when page is fully loaded (complete) and has a URL
   if (changeInfo.status === 'complete' && tab.url) {
-    // First check if we already have a setting for this tab
-    chrome.storage.local.get(`tab_${tabId}_isActive`, data => {
-      // If no explicit setting exists yet for this tab
-      if (data[`tab_${tabId}_isActive`] === undefined) {
-        const isActive = isDomainActive(tab.url);
-        chrome.storage.local.set({ [`tab_${tabId}_isActive`]: isActive });
-        
-        // If domain is active, fetch the HTML
-        if (isActive) {
-          chrome.tabs.sendMessage(tabId, { action: "getPageHTML" })
-            .then(response => {
-              if (response && response.html) {
-                sendHTMLToServer(response.html, tabId);
-              }
-            })
-            .catch(error => console.error("Error sending message:", error));
+    // Check if this domain is active
+    const isActive = isDomainActive(tab.url);
+    
+    // Get current state
+    chrome.storage.session.get(`tab_${tabId}_state`, function(data) {
+      const currentState = data[`tab_${tabId}_state`] || {
+        isActive: false,
+        htmlProcessingStatus: 'not_sent',
+        searchState : {
+          searchStatus: 'idle',
+          lastSearch: null,
+          currentPosition: 0,
+          totalResults: 0
         }
+      };
+      
+      // Update state
+      const newState = {
+        ...currentState,
+        isActive: isActive,
+        htmlProcessingStatus: isActive ? 'processing' : 'idle'
+      };
+      
+      // Store the updated state
+      chrome.storage.session.set({ [`tab_${tabId}_state`]: newState });
+      
+      // If domain is active, fetch the HTML and send to server
+      if (isActive) {
+        console.log(`Tab ${tabId} updated with active domain. Fetching HTML...`);
+        chrome.tabs.sendMessage(tabId, { action: "getPageHTML" })
+          .then(response => {
+            if (response && response.html) {
+              return sendHTMLToServer(response.html, tabId);
+            }
+          })
+          .catch(error => {
+            console.error("Error sending/processing message:", error);
+            // Update state to error
+            chrome.storage.session.get(`tab_${tabId}_state`, function(data) {
+              const currentState = data[`tab_${tabId}_state`];
+              currentState.htmlProcessingStatus = 'error';
+              chrome.storage.session.set({ [`tab_${tabId}_state`]: currentState });
+              chrome.runtime.sendMessage({
+                action: "updateHTMLStatus",
+                status: 'error',
+                tabId: tabId
+              });
+            });
+          });
       }
     });
   }
@@ -73,9 +156,9 @@ chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
 // Clean up tab data when a tab is closed
 chrome.tabs.onRemoved.addListener((tabId) => {
   // Remove tab-specific data from storage
-  chrome.storage.local.remove(`tab_${tabId}_isActive`, () => {
+  chrome.storage.session.remove(`tab_${tabId}_state`, () => {
     if (chrome.runtime.lastError) {
-      console.error(`Error removing tab_${tabId}_isActive:`, chrome.runtime.lastError);
+      console.error(`Error removing tab_${tabId}_state:`, chrome.runtime.lastError);
     } else {
       console.log(`Cleaned up data for tab ${tabId}`);
     }
@@ -116,6 +199,18 @@ async function initializeSession(retryCount = 0) {
 
 async function sendHTMLToServer(html, tabId) {
   try {
+    // Update state to processing
+    chrome.storage.session.get(`tab_${tabId}_state`, function(data) {
+      const currentState = data[`tab_${tabId}_state`];
+      currentState.htmlProcessingStatus = 'processing';
+      chrome.storage.session.set({ [`tab_${tabId}_state`]: currentState });
+      chrome.runtime.sendMessage({
+        action: "updateHTMLStatus",
+        status: 'processing',
+        tabId: tabId
+      });
+    });
+
     const response = await fetch('http://127.0.0.1:5000/receive_html', {
       method: 'POST',
       credentials: 'include',
@@ -136,6 +231,21 @@ async function sendHTMLToServer(html, tabId) {
     
     const data = await response.json();
     console.log('HTML sent to server:', data);
+    
+    // Update state to ready
+    chrome.storage.session.get(`tab_${tabId}_state`, function(data) {
+      const currentState = data[`tab_${tabId}_state`];
+      currentState.htmlProcessingStatus = 'ready';
+      currentState.lastProcessedHTML = new Date().toISOString();
+      chrome.storage.session.set({ [`tab_${tabId}_state`]: currentState });
+      chrome.runtime.sendMessage({
+        action: "updateHTMLStatus",
+        status: 'ready',
+        timestamp: currentState.lastProcessedHTML,
+        tabId: tabId
+      });
+    });
+    
     return data;
   } catch (error) {
     if (error.message === 'Unauthorized') {
@@ -144,6 +254,19 @@ async function sendHTMLToServer(html, tabId) {
     } else {
       // Handle other errors
       console.error('Error sending HTML to server:', error);
+      
+      // Update state to error
+      chrome.storage.session.get(`tab_${tabId}_state`, function(data) {
+        const currentState = data[`tab_${tabId}_state`];
+        currentState.htmlProcessingStatus = 'error';
+        chrome.storage.session.set({ [`tab_${tabId}_state`]: currentState });
+        chrome.runtime.sendMessage({
+          action: "updateHTMLStatus",
+          status: 'error',
+          tabId: tabId
+        });
+      });
+      
       throw error;
     }
   }
@@ -216,6 +339,39 @@ function removeActiveDomain(domain) {
       chrome.storage.local.set({ activeDomains: domains });
       // Update the local array
       activeDomains = domains;
+      
+      // Find and update all tabs with this domain
+      chrome.tabs.query({}, (tabs) => {
+        tabs.forEach(tab => {
+          if (tab.url) {
+            try {
+              const tabDomain = new URL(tab.url).hostname;
+              if (tabDomain === domain || (domain !== "" && tabDomain.includes(domain))) {
+                // Update the tab's state to inactive
+                chrome.storage.session.get(`tab_${tab.id}_state`, function(data) {
+                  const tabState = data[`tab_${tab.id}_state`];
+                  if (tabState && tabState.isActive) {
+                    tabState.isActive = false;
+                    chrome.storage.session.set({[`tab_${tab.id}_state`]: tabState});
+                    
+                    // Send message to remove highlights in this tab
+                    chrome.tabs.sendMessage(tab.id, { action: "removeHighlights" })
+                      .catch(err => console.log(`Could not send message to tab ${tab.id}:`, err));
+                      
+                    // Broadcast state change to all tabs
+                    chrome.runtime.sendMessage({
+                      action: "stateChanged",
+                      tabId: tab.id
+                    });
+                  }
+                });
+              }
+            } catch (e) {
+              console.error("Error processing URL:", e);
+            }
+          }
+        });
+      });
     }
   });
 }

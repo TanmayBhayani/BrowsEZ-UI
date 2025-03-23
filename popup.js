@@ -2,34 +2,61 @@ document.addEventListener('DOMContentLoaded', function() {
   const searchBar = document.getElementById('searchBar');
   const searchForm = document.getElementById('searchForm');
   const toggleButton = document.getElementById('toggleButton');
+  const statusText = document.createElement('div');
+  statusText.id = 'statusText';
+  statusText.style.marginTop = '10px';
+  statusText.style.fontSize = '12px';
+  statusText.style.color = '#666';
+  toggleButton.parentNode.insertBefore(statusText, toggleButton.nextSibling);
+  
+  // Establish connection to background script to detect extension reload
+  const port = chrome.runtime.connect({name: "popup"});
+  
   // Load the current state
   chrome.tabs.query({active: true, currentWindow: true}, function(tabs) {
     const tab = tabs[0];
-    chrome.storage.local.get(`tab_${tab.id}_isActive`, function(data) {
-      const isActive = data[`tab_${tab.id}_isActive`] || false;
-      updateUI(isActive);
+    chrome.storage.session.get(`tab_${tab.id}_state`, function(data) {
+      const tabState = data[`tab_${tab.id}_state`] || {
+        isActive: false,
+        htmlProcessingStatus: 'not_sent', // not_sent, processing, ready, error
+        lastProcessedHTML: null,
+        searchState: {
+          lastSearch: null,
+          currentPosition: 0,
+          totalResults: 0,
+          searchStatus: 'idle'
+        }
+      };
+      updateUI(tabState);
     });
   });
 
   toggleButton.addEventListener('click', async function() {
     try {
-      // Get the active tab - directly awaitable
       const [tab] = await chrome.tabs.query({active: true, currentWindow: true});
+      const data = await chrome.storage.session.get(`tab_${tab.id}_state`);
       
-      // Get current state from storage - directly awaitable
-      const data = await chrome.storage.local.get(`tab_${tab.id}_isActive`);
+      const currentState = data[`tab_${tab.id}_state`] || {
+        isActive: false,
+        htmlProcessingStatus: 'not_sent',
+        lastProcessedHTML: null,
+        searchState: {
+          lastSearch: null,
+          currentPosition: 0,
+          totalResults: 0,
+          searchStatus: 'idle'
+        }
+      };
       
-      // Toggle the active state
-      const isActive = !data[`tab_${tab.id}_isActive`];
+      const newState = {
+        ...currentState,
+        isActive: !currentState.isActive
+      };
       
-      // Update the storage with new state - directly awaitable
-      await chrome.storage.local.set({[`tab_${tab.id}_isActive`]: isActive});
+      await chrome.storage.session.set({[`tab_${tab.id}_state`]: newState});
       
-      if (isActive) {
-        // If activating, get the domain and add it to active list
+      if (newState.isActive) {
         const domain = new URL(tab.url).hostname;
-        
-        // Add domain to active list
         await chrome.runtime.sendMessage({
           action: "addActiveDomain",
           domain: domain
@@ -42,14 +69,17 @@ document.addEventListener('DOMContentLoaded', function() {
         await chrome.runtime.sendMessage({
           action: "removeActiveDomain",
           domain: domain
-        });
+        });        
+        // Send message to remove highlights when deactivated
+        await chrome.tabs.sendMessage(tab.id, { action: "removeHighlights" });
       }
-      // Update the UI based on new state
-      updateUI(isActive);
+      
+      updateUI(newState);
     } catch (e) {
       console.error("Error in toggle action:", e);
     }
   });
+
   searchForm.addEventListener('submit', async function(e) {
     e.preventDefault();
     const searchString = searchBar.value.trim();
@@ -59,8 +89,20 @@ document.addEventListener('DOMContentLoaded', function() {
       try {
         // Get the active tab
         const [tab] = await chrome.tabs.query({active: true, currentWindow: true});
+        const data = await chrome.storage.session.get(`tab_${tab.id}_state`);
+        const currentState = data[`tab_${tab.id}_state`];
         
-        // Send the message to the background script
+        // Update state to show searching
+        currentState.searchState = {
+          ...currentState.searchState,
+          lastSearch: searchString,
+          currentPosition: 0,
+          totalResults: 0
+        };
+        
+        await chrome.storage.session.set({[`tab_${tab.id}_state`]: currentState});
+        updateUI(currentState);
+        
         await chrome.runtime.sendMessage({
           action: "find", 
           searchString: searchString, 
@@ -75,9 +117,37 @@ document.addEventListener('DOMContentLoaded', function() {
     }
   });
 
-  function updateUI(isActive) {
-    toggleButton.textContent = isActive ? 'Deactivate' : 'Activate';
-    searchBar.style.display = isActive ? 'block' : 'none';
+  function updateUI(tabState) {
+    toggleButton.textContent = tabState.isActive ? 'Deactivate' : 'Activate';
+    searchBar.style.display = tabState.isActive ? 'block' : 'none';
+    statusText.style.display = tabState.isActive ? 'block' : 'none';
+    
+    // Hide the position counter if not active or no search results
+    const positionCounter = document.getElementById('position-counter');
+    const navigationControls = document.querySelector('.navigation-controls');
+    const hasSearchResults = tabState.isActive && 
+                            tabState.searchState && 
+                            tabState.searchState.totalResults > 0;
+    
+    navigationControls.style.display = hasSearchResults ? 'block' : 'none';
+    
+    // Update status text based on HTML processing status
+    let statusMessage = '';
+    switch(tabState.htmlProcessingStatus) {
+      case 'processing':
+        statusMessage = 'Getting ready...';
+        break;
+      case 'ready':
+        statusMessage = 'Ready';
+        break;
+      case 'error':
+        statusMessage = 'Error processing page';
+        break;
+      default:
+        statusMessage = '';
+    }
+    
+    statusText.textContent = statusMessage;
   }
 });
 
@@ -95,8 +165,78 @@ document.getElementById('nextButton').addEventListener('click', () => {
 
 chrome.runtime.onMessage.addListener((message) => {
   if (message.action === "updatePosition") {
-    document.getElementById('position-counter').textContent = 
-      `${message.position}/${message.total}`;
+    chrome.tabs.query({active: true, currentWindow: true}, async function(tabs) {
+      const tab = tabs[0];
+      const data = await chrome.storage.session.get(`tab_${tab.id}_state`);
+      const currentState = data[`tab_${tab.id}_state`];
+      
+      currentState.searchState = {
+        ...currentState.searchState,
+        currentPosition: message.position,
+        totalResults: message.total
+      };
+      
+      await chrome.storage.session.set({[`tab_${tab.id}_state`]: currentState});
+      
+      // Update the position counter text
+      document.getElementById('position-counter').textContent = 
+        `${message.position}/${message.total}`;
+      
+      // Make sure the navigation controls are visible
+      if (message.total > 0) {
+        document.querySelector('.navigation-controls').style.display = 'block';
+      } else {
+        document.querySelector('.navigation-controls').style.display = 'none';
+      }
+    });
+  }
+  
+  if (message.action === "updateHTMLStatus") {
+    chrome.tabs.query({active: true, currentWindow: true}, async function(tabs) {
+      const tab = tabs[0];
+      const data = await chrome.storage.session.get(`tab_${tab.id}_state`);
+      const currentState = data[`tab_${tab.id}_state`];
+      
+      currentState.htmlProcessingStatus = message.status;
+      if (message.status === 'ready') {
+        currentState.lastProcessedHTML = message.timestamp;
+      }
+      
+      await chrome.storage.session.set({[`tab_${tab.id}_state`]: currentState});
+      
+      // Update UI
+      const statusText = document.getElementById('statusText');
+      if (statusText) {
+        let statusMessage = '';
+        switch(message.status) {
+          case 'processing':
+            statusMessage = 'Getting ready...';
+            break;
+          case 'ready':
+            statusMessage = 'Ready';
+            break;
+          case 'error':
+            statusMessage = 'Error processing page';
+            break;
+        }
+        statusText.textContent = statusMessage;
+      }
+    });
+  }
+  
+  if (message.action === "stateChanged") {
+    // When state changes from another tab, refresh our UI
+    chrome.tabs.query({active: true, currentWindow: true}, function(tabs) {
+      // Only update if popup is open
+      if (tabs && tabs.length > 0) {
+        chrome.storage.session.get(`tab_${tabs[0].id}_state`, function(data) {
+          const tabState = data[`tab_${tabs[0].id}_state`];
+          if (tabState) {
+            updateUI(tabState);
+          }
+        });
+      }
+    });
   }
 });
 

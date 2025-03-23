@@ -5,11 +5,27 @@
     body { width: 300px; padding: 10px; }
     #searchBar { width: 100%; margin-bottom: 10px; display: none; }
     #toggleButton { width: 100%; }
+    .navigation-controls { display: none; margin-top: 10px; text-align: center; }
+    .header { 
+      display: flex; 
+      align-items: center; 
+      justify-content: space-between;
+    }
+    .header h1 {
+      margin: 0;
+      font-size: 18px;
+    }
+    .settings-icon {
+      background: none;
+      border: none;
+      cursor: pointer;
+      padding: 5px;
+    }
     </style>
 </head>
 <body>
   <div class="header">
-    <h1>Find Extension</h1>
+    <h1>Find</h1>
     <button id="settings-button" class="settings-icon" title="Settings">
       <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
         <circle cx="12" cy="12" r="3"></circle>
