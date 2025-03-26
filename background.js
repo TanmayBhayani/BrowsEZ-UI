@@ -295,9 +295,26 @@ async function searchToServer(searchString, tabId) {
     // Send search results to content script
     await chrome.tabs.sendMessage(tabId, {
       action: "highlightElements",
-      elements: data.searchResults.metadatas[0]
+      elements: data.searchResults
     });
-    console.log('Message sent with tabId:', tabId);
+    
+    // Update the user's search state
+    const stateData = await chrome.storage.session.get(`tab_${tabId}_state`);
+    const currentState = stateData[`tab_${tabId}_state`] || {};
+    
+    const newState = {
+      ...currentState,
+      searchState: {
+        lastSearch: searchString,
+        currentPosition: 1,
+        totalResults: data.searchResults.metadatas[0].length,
+        searchStatus: 'showing_results'
+      }
+    };
+    
+    await chrome.storage.session.set({[`tab_${tabId}_state`]: newState});
+    
+    console.log('Search results sent to tab:', tabId);
     return data;
   } catch (error) {
     if (error.message === 'Unauthorized') {
