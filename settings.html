@@ -8,9 +8,28 @@
 </head>
 <body>
   <div class="container">
-    <h1>Settings</h1>
-    <p>Settings page content will go here.</p>
+    <div class="header">
+      <h1>Settings</h1>
+      <button id="back-button" class="back-button">Back</button>
+    </div>
+    
+    <div class="section">
+      <h2>Active Domains</h2>
+      <p class="description">Manage websites where the Find extension is active.</p>
+      
+      <div class="domains-container">
+        <div id="domains-list" class="domains-list">
+          <!-- Domains will be added here dynamically -->
+        </div>
+        
+        <div class="add-domain-form">
+          <input type="text" id="new-domain" placeholder="Add a new domain (e.g., example.com)">
+          <button id="add-domain-btn">Add</button>
+        </div>
+      </div>
+    </div>
   </div>
+  
   <script src="settings.js"></script>
 </body>
 </html>

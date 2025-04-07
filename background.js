@@ -119,7 +119,7 @@ chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
       const newState = {
         ...currentState,
         isActive: isActive,
-        htmlProcessingStatus: isActive ? 'processing' : 'idle'
+        htmlProcessingStatus: isActive ? 'processing' : 'not_sent'
       };
       
       // Store the updated state
@@ -272,9 +272,10 @@ async function sendHTMLToServer(html, tabId) {
   }
 }
 
-async function searchToServer(searchString, tabId) {
+async function searchToServer(searchString, tabId, useLlmFiltering = true) {
   const searchParams = new URLSearchParams({
-    searchString: searchString
+    searchString: searchString,
+    useLlmFiltering: useLlmFiltering.toString()
   });
   
   try {
@@ -292,13 +293,10 @@ async function searchToServer(searchString, tabId) {
     }
     
     const data = await response.json();
-    // Send search results to content script
-    await chrome.tabs.sendMessage(tabId, {
-      action: "highlightElements",
-      elements: data.searchResults
-    });
+    console.log("Search results received from server:", data);  // Debug log
+    console.log("Metadata being stored:", data.searchResults.metadatas[0]);  // Debug log
     
-    // Update the user's search state
+    // Update the tab state with search results instead of sending directly to content script
     const stateData = await chrome.storage.session.get(`tab_${tabId}_state`);
     const currentState = stateData[`tab_${tabId}_state`] || {};
     
@@ -306,15 +304,23 @@ async function searchToServer(searchString, tabId) {
       ...currentState,
       searchState: {
         lastSearch: searchString,
-        currentPosition: 1,
+        currentPosition: 0, // Reset to 0 as nothing is highlighted yet
         totalResults: data.searchResults.metadatas[0].length,
-        searchStatus: 'showing_results'
+        searchStatus: 'showing_results',
+        searchResults: data.searchResults.metadatas[0] // Store the full search results in tab state
       }
     };
     
     await chrome.storage.session.set({[`tab_${tabId}_state`]: newState});
     
-    console.log('Search results sent to tab:', tabId);
+    // Notify popup about the complete search results
+    chrome.runtime.sendMessage({
+      action: "searchComplete",
+      message: data.message,
+      tabId: tabId
+    });
+    
+    console.log('Search results stored in tab state for tab:', tabId);
     return data;
   } catch (error) {
     if (error.message === 'Unauthorized') {
@@ -322,7 +328,7 @@ async function searchToServer(searchString, tabId) {
       const resp = await chrome.tabs.sendMessage(tabId, { action: "getPageHTML" });
       if (resp && resp.html) {
         await sendHTMLToServer(resp.html, tabId);
-        return searchToServer(searchString, tabId);
+        return searchToServer(searchString, tabId, useLlmFiltering);
       }
     } else {
       console.error('Error searching on server:', error);
@@ -438,7 +444,9 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   
   if (request.action === "find") {
     if (isDomainActive(request.tabUrl)) {
-      searchToServer(request.searchString, request.tabId)
+      // Default to true if not specified
+      const useLlmFiltering = request.useLlmFiltering !== undefined ? request.useLlmFiltering : true;
+      searchToServer(request.searchString, request.tabId, useLlmFiltering)
         .then(result => sendResponse(result))
         .catch(error => sendResponse({ error: error.message }));
       return true;

@@ -1,11 +1,30 @@
-let currentHighlightIndex = 0;
-let highlightedElements = [];
+let highlightedElement = null;
 const style = document.createElement('style');
 
 style.textContent = `
   .extension-highlight {
     background-color: yellow !important;
     outline: 2px solid red !important;
+  }
+  
+  .extension-tooltip {
+    position: absolute;
+    background-color: rgba(0, 0, 0, 0.8);
+    color: white;
+    padding: 12px 16px;
+    border-radius: 6px;
+    max-width: 400px;
+    z-index: 10000;
+    font-size: 14px;
+    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.3);
+    line-height: 1.4;
+  }
+  
+  .tooltip-explanation {
+    margin-top: 8px;
+    padding-top: 8px;
+    border-top: 1px solid rgba(255, 255, 255, 0.2);
+    font-style: italic;
   }
 `;
 document.head.appendChild(style);
@@ -62,18 +81,13 @@ function sendHTMLToBackend(html) {
 
 chrome.runtime.onMessage.addListener(function(request, sender, sendResponse) {
   console.log('Message received in content script:', request);
-  if (request.action === "highlightElements") {
-    highlightElements(request.elements);
-  }
-  else if (request.action === "next") {
-    navigateNext();
-  } else if (request.action === "previous") {
-    navigatePrevious();
+  
+  if (request.action === "highlightElement") {
+    highlightElement(request.element);
   }
   else if (request.action === "removeHighlights") {
     removeAllHighlights();
-    highlightedElements = [];
-    currentHighlightIndex = 0;
+    highlightedElement = null;
   }
   else if (request.action === "getPageHTML") {
     // When background.js requests the HTML, we prepare and send it
@@ -92,60 +106,55 @@ chrome.runtime.onMessage.addListener(function(request, sender, sendResponse) {
   }
   return true;
 });
-function highlightElements(elements) {
+
+function highlightElement(elementMetadata) {
   // Remove any existing highlights
   removeAllHighlights();
   
-  highlightedElements = elements;
-  currentHighlightIndex = 0;
+  // Store the current element metadata
+  highlightedElement = elementMetadata;
   
-  // Only highlight and scroll to the first element
-  highlightCurrentElement();
-  updatePosition();
+  const element = document.querySelector(
+    `[data-element-id="${elementMetadata.element_id}"]`
+  );
+  
+  if (element) {
+    element.classList.add('extension-highlight');
+    element.scrollIntoView({behavior: "smooth", block: "center"});
+    
+    // Remove any existing tooltips
+    document.querySelectorAll('.extension-tooltip').forEach(tip => tip.remove());
+    
+    // Create tooltip with element info
+    const tooltip = document.createElement('div');
+    tooltip.className = 'extension-tooltip';
+    
+    // Initialize tooltipContent variable
+    let tooltipContent = '';
+    
+    // Add explanation from LLM if available
+    if (elementMetadata.explanation) {
+      tooltipContent += `<div class="tooltip-explanation"><strong>Why this matches:</strong> ${elementMetadata.explanation}</div>`;
+    }
+    
+    tooltip.innerHTML = tooltipContent;
+    
+    // Position the tooltip near the element
+    const rect = element.getBoundingClientRect();
+    tooltip.style.top = `${rect.bottom + window.scrollY + 5}px`;
+    tooltip.style.left = `${rect.left + window.scrollX}px`;
+    
+    document.body.appendChild(tooltip);
+  }
 }
 
 function removeAllHighlights() {
   document.querySelectorAll('.extension-highlight').forEach(el => {
     el.classList.remove('extension-highlight');
   });
-}
-
-function highlightCurrentElement() {
-  if (highlightedElements.length === 0) return;
   
-  const element = document.querySelector(
-    `[data-element-id="${highlightedElements[currentHighlightIndex].element_id}"]`
-  );
-  
-  if (element) {
-    removeAllHighlights();
-    element.classList.add('extension-highlight');
-    element.scrollIntoView({behavior: "smooth", block: "center"});
-  }
-}
-
-function updatePosition() {
-  chrome.runtime.sendMessage({
-    action: "updatePosition",
-    position: currentHighlightIndex + 1,
-    total: highlightedElements.length
-  });
-}
-
-function navigateNext() {
-  if (currentHighlightIndex < highlightedElements.length - 1) {
-    currentHighlightIndex++;
-    highlightCurrentElement();
-    updatePosition();
-  }
-}
-
-function navigatePrevious() {
-  if (currentHighlightIndex > 0) {
-    currentHighlightIndex--;
-    highlightCurrentElement();
-    updatePosition();
-  }
+  // Remove any existing tooltips
+  document.querySelectorAll('.extension-tooltip').forEach(tip => tip.remove());
 }
 
 if (document.readyState === 'loading') {

@@ -1,16 +1,33 @@
+// Define color constants
+const LIGHT_GRAY = '#f5f5f5';
+const RED = '#e57373';
+const BLUE = '#4a90e2';
+const MEDIUM_GRAY = '#666';
+const BRIGHT_BLUE = '#4a8cff';
+
 document.addEventListener('DOMContentLoaded', function() {
   const searchBar = document.getElementById('searchBar');
   const searchForm = document.getElementById('searchForm');
   const toggleButton = document.getElementById('toggleButton');
   const statusText = document.createElement('div');
+  const llmToggle = document.getElementById('llm-toggle');
+  const llmToggleContainer = document.querySelector('.llm-toggle-container');
+  
   statusText.id = 'statusText';
   statusText.style.marginTop = '10px';
   statusText.style.fontSize = '12px';
-  statusText.style.color = '#666';
+  statusText.style.color = MEDIUM_GRAY;
   toggleButton.parentNode.insertBefore(statusText, toggleButton.nextSibling);
   
-  // Establish connection to background script to detect extension reload
-  const port = chrome.runtime.connect({name: "popup"});
+  // Create a message container for search explanation
+  const messageContainer = document.createElement('div');
+  messageContainer.id = 'message-container';
+  messageContainer.style.marginTop = '10px';
+  messageContainer.style.fontSize = '12px';
+  messageContainer.style.color = BRIGHT_BLUE;
+  messageContainer.style.fontStyle = 'italic';
+  messageContainer.style.display = 'none';
+  toggleButton.parentNode.insertBefore(messageContainer, statusText);
   
   // Load the current state
   chrome.tabs.query({active: true, currentWindow: true}, function(tabs) {
@@ -24,10 +41,36 @@ document.addEventListener('DOMContentLoaded', function() {
           lastSearch: null,
           currentPosition: 0,
           totalResults: 0,
-          searchStatus: 'idle'
+          searchStatus: 'idle',
+          searchResults: []
         }
       };
       updateUI(tabState);
+      
+      // If there were previous search results, highlight the current position
+      if (tabState.searchState && 
+          tabState.searchState.searchResults && 
+          tabState.searchState.searchResults.length > 0 &&
+          tabState.searchState.searchStatus === 'showing_results') {
+        const indexToHighlight = tabState.searchState.currentPosition > 0 ? 
+          tabState.searchState.currentPosition - 1 : 0;
+        highlightElementAtIndex(indexToHighlight, tab.id);
+      }
+    });
+    
+    // Load LLM toggle state
+    chrome.storage.local.get('llmFilteringEnabled', function(data) {
+      const isLlmEnabled = data.llmFilteringEnabled !== undefined ? data.llmFilteringEnabled : true;
+      llmToggle.checked = isLlmEnabled;
+      llmToggleContainer.style.display = 'flex'; // Make sure it's visible
+    });
+  });
+
+  // LLM Toggle event listener
+  llmToggle.addEventListener('change', function() {
+    const isEnabled = llmToggle.checked;
+    chrome.storage.local.set({ llmFilteringEnabled: isEnabled }, function() {
+      console.log(`LLM filtering ${isEnabled ? 'enabled' : 'disabled'}`);
     });
   });
 
@@ -61,11 +104,27 @@ document.addEventListener('DOMContentLoaded', function() {
           action: "addActiveDomain",
           domain: domain
         });
-        
+        updateUI(newState)
         await chrome.tabs.sendMessage(tab.id, { action: "sendHTML" });
       } else {
         // If deactivating, remove domain from active list
         const domain = new URL(tab.url).hostname;
+        // Reset search state for the tab
+        const resetSearchState = {
+          ...newState,
+          searchState: {
+            lastSearch: null,
+            currentPosition: 0,
+            totalResults: 0,
+            searchStatus: 'idle'
+          }
+        };
+        
+        // Store the reset state in session storage
+        await chrome.storage.session.set({[`tab_${tab.id}_state`]: resetSearchState});
+        
+        // Update UI to reflect the reset state
+        updateUI(resetSearchState);
         await chrome.runtime.sendMessage({
           action: "removeActiveDomain",
           domain: domain
@@ -73,8 +132,6 @@ document.addEventListener('DOMContentLoaded', function() {
         // Send message to remove highlights when deactivated
         await chrome.tabs.sendMessage(tab.id, { action: "removeHighlights" });
       }
-      
-      updateUI(newState);
     } catch (e) {
       console.error("Error in toggle action:", e);
     }
@@ -82,6 +139,12 @@ document.addEventListener('DOMContentLoaded', function() {
 
   searchForm.addEventListener('submit', async function(e) {
     e.preventDefault();
+    
+    // Don't process the search if the search bar is disabled
+    if (searchBar.disabled) {
+      return;
+    }
+    
     const searchString = searchBar.value.trim();
     console.log("Search string:", searchString);
     
@@ -92,12 +155,17 @@ document.addEventListener('DOMContentLoaded', function() {
         const data = await chrome.storage.session.get(`tab_${tab.id}_state`);
         const currentState = data[`tab_${tab.id}_state`];
         
+        // Get LLM filtering preference
+        const llmData = await chrome.storage.local.get('llmFilteringEnabled');
+        const useLlmFiltering = llmData.llmFilteringEnabled !== undefined ? llmData.llmFilteringEnabled : true;
+        
         // Update state to show searching
         currentState.searchState = {
           ...currentState.searchState,
           lastSearch: searchString,
           currentPosition: 0,
-          totalResults: 0
+          totalResults: 0,
+          searchStatus: 'searching'
         };
         
         await chrome.storage.session.set({[`tab_${tab.id}_state`]: currentState});
@@ -107,7 +175,8 @@ document.addEventListener('DOMContentLoaded', function() {
           action: "find", 
           searchString: searchString, 
           tabId: tab.id,
-          tabUrl: tab.url
+          tabUrl: tab.url,
+          useLlmFiltering: useLlmFiltering
         });
         
         searchBar.value = ''; // Clear the search bar
@@ -116,23 +185,84 @@ document.addEventListener('DOMContentLoaded', function() {
       }
     }
   });
+});
 
-  function updateUI(tabState) {
-    toggleButton.textContent = tabState.isActive ? 'Deactivate' : 'Activate';
-    searchBar.style.display = tabState.isActive ? 'block' : 'none';
-    statusText.style.display = tabState.isActive ? 'block' : 'none';
+function updateUI(tabState) {
+  toggleButton.textContent = tabState.isActive ? 'Deactivate' : 'Activate';
+  toggleButton.style.backgroundColor = tabState.isActive ? RED : BLUE;
+  
+  // Handle search bar visibility
+  if (tabState.isActive) {
+    searchBar.style.display = 'block';
+    searchBar.placeholder = 'Find...';
     
-    // Hide the position counter if not active or no search results
-    const positionCounter = document.getElementById('position-counter');
-    const navigationControls = document.querySelector('.navigation-controls');
-    const hasSearchResults = tabState.isActive && 
-                            tabState.searchState && 
-                            tabState.searchState.totalResults > 0;
+    // Disable search bar when processing or searching
+    const isProcessing = tabState.htmlProcessingStatus === 'processing';
+    const isSearching = tabState.searchState && tabState.searchState.searchStatus === 'searching';
     
-    navigationControls.style.display = hasSearchResults ? 'block' : 'none';
-    
-    // Update status text based on HTML processing status
-    let statusMessage = '';
+    if (isProcessing || isSearching) {
+      searchBar.disabled = true;
+      searchBar.style.backgroundColor = LIGHT_GRAY;
+      searchBar.style.cursor = 'not-allowed';
+      searchBar.style.opacity = '0.7';
+    } else {
+      searchBar.disabled = false;
+      searchBar.style.backgroundColor = '';
+      searchBar.style.cursor = '';
+      searchBar.style.opacity = '';
+    }
+  } else {
+    searchBar.style.display = 'none';
+    searchBar.placeholder = 'Find...';
+  }
+  
+  // Handle search icon via CSS
+  const styleElement = document.getElementById('dynamic-styles') || document.createElement('style');
+  if (!document.getElementById('dynamic-styles')) {
+    styleElement.id = 'dynamic-styles';
+    document.head.appendChild(styleElement);
+  }
+  
+  styleElement.textContent = `
+    #searchForm::after {
+      display: ${tabState.isActive ? 'block' : 'none'};
+    }
+  `;
+  
+  statusText.style.display = tabState.isActive ? 'block' : 'none';
+  
+  // Handle message container
+  const messageContainer = document.getElementById('message-container');
+  if (messageContainer && tabState.isActive && 
+      tabState.searchState && 
+      tabState.searchState.message) {
+    messageContainer.textContent = tabState.searchState.message;
+    messageContainer.style.display = 'block';
+  } else if (messageContainer) {
+    messageContainer.style.display = 'none';
+  }
+  
+  // Hide the position counter if not active or no search results
+  const positionCounter = document.getElementById('position-counter');
+  const navigationControls = document.querySelector('.navigation-controls');
+  const hasSearchResults = tabState.isActive && 
+                          tabState.searchState && 
+                          tabState.searchState.totalResults > 0;
+  
+  navigationControls.style.display = hasSearchResults ? 'flex' : 'none';
+  
+  // Update status text based on HTML processing status and search status
+  let statusMessage = '';
+  
+  if (tabState.searchState && tabState.searchState.searchStatus === 'searching') {
+    statusMessage = 'Searching...';
+  } else if (tabState.searchState && tabState.searchState.searchStatus === 'showing_results') {
+    if (tabState.searchState.totalResults > 0) {
+      statusMessage = 'Results';
+    } else {
+      statusMessage = 'No relevant Result Found';
+    }
+  } else {
     switch(tabState.htmlProcessingStatus) {
       case 'processing':
         statusMessage = 'Getting ready...';
@@ -146,82 +276,167 @@ document.addEventListener('DOMContentLoaded', function() {
       default:
         statusMessage = '';
     }
-    
-    statusText.textContent = statusMessage;
   }
-});
+  
+  statusText.textContent = statusMessage;
+}
 
+// Function to highlight a specific element by index
+function highlightElementAtIndex(index, tabId) {
+  chrome.storage.session.get(`tab_${tabId}_state`, async function(data) {
+    const tabState = data[`tab_${tabId}_state`];
+    
+    if (!tabState || 
+        !tabState.searchState || 
+        !tabState.searchState.searchResults || 
+        index >= tabState.searchState.searchResults.length) {
+      return;
+    }
+    
+    // Get the element to highlight
+    const elementToHighlight = tabState.searchState.searchResults[index];
+    
+    // Send message to content script to highlight this specific element
+    chrome.tabs.sendMessage(tabId, {
+      action: "highlightElement",
+      element: elementToHighlight
+    });
+    
+    // Update the current position in the state
+    tabState.searchState.currentPosition = index + 1;
+    await chrome.storage.session.set({[`tab_${tabId}_state`]: tabState});
+    
+    // Update the position counter
+    document.getElementById('position-counter').textContent = 
+      `${index + 1}/${tabState.searchState.totalResults}`;
+    
+    updateUI(tabState);
+  });
+}
+
+// Replace the previous next/prev button handlers with new ones that use highlightElementAtIndex
 document.getElementById('prevButton').addEventListener('click', () => {
   chrome.tabs.query({active: true, currentWindow: true}, function(tabs) {
-    chrome.tabs.sendMessage(tabs[0].id, {action: "previous"});
+    const tab = tabs[0];
+    chrome.storage.session.get(`tab_${tab.id}_state`, function(data) {
+      const tabState = data[`tab_${tab.id}_state`];
+      
+      if (tabState && 
+          tabState.searchState &&
+          tabState.searchState.currentPosition > 1) {
+        highlightElementAtIndex(tabState.searchState.currentPosition - 2, tab.id);
+      }
+    });
   });
 });
 
 document.getElementById('nextButton').addEventListener('click', () => {
   chrome.tabs.query({active: true, currentWindow: true}, function(tabs) {
-    chrome.tabs.sendMessage(tabs[0].id, {action: "next"});
+    const tab = tabs[0];
+    chrome.storage.session.get(`tab_${tab.id}_state`, function(data) {
+      const tabState = data[`tab_${tab.id}_state`];
+      
+      if (tabState && 
+          tabState.searchState &&
+          tabState.searchState.currentPosition < tabState.searchState.totalResults) {
+        highlightElementAtIndex(tabState.searchState.currentPosition, tab.id);
+      }
+    });
   });
 });
 
-chrome.runtime.onMessage.addListener((message) => {
+// Update the message listener for searchComplete to handle the search results
+chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+  // Deprecated Message
   if (message.action === "updatePosition") {
-    chrome.tabs.query({active: true, currentWindow: true}, async function(tabs) {
+    chrome.tabs.query({active: true, currentWindow: true}, function(tabs) {
       const tab = tabs[0];
-      const data = await chrome.storage.session.get(`tab_${tab.id}_state`);
-      const currentState = data[`tab_${tab.id}_state`];
-      
-      currentState.searchState = {
-        ...currentState.searchState,
-        currentPosition: message.position,
-        totalResults: message.total
-      };
-      
-      await chrome.storage.session.set({[`tab_${tab.id}_state`]: currentState});
-      
-      // Update the position counter text
-      document.getElementById('position-counter').textContent = 
-        `${message.position}/${message.total}`;
-      
-      // Make sure the navigation controls are visible
-      if (message.total > 0) {
-        document.querySelector('.navigation-controls').style.display = 'block';
-      } else {
-        document.querySelector('.navigation-controls').style.display = 'none';
-      }
+      let currentState;
+      chrome.storage.session.get(`tab_${tab.id}_state`).then(data => {
+        currentState = data[`tab_${tab.id}_state`];
+        
+        // Preserve the current searchStatus when updating position
+        const currentSearchStatus = currentState.searchState?.searchStatus || 'idle';
+        
+        currentState.searchState = {
+          ...currentState.searchState,
+          currentPosition: message.position,
+          totalResults: message.total,
+          searchStatus: message.total > 0 ? 'showing_results' : 'showing_results' // Still showing results but with zero count
+        };
+        
+        return chrome.storage.session.set({[`tab_${tab.id}_state`]: currentState});
+      }).then(() => {
+        // Update the position counter text
+        document.getElementById('position-counter').textContent = 
+          `${message.position}/${message.total}`;
+        
+        // Make sure the navigation controls are visible
+        if (message.total > 0) {
+          document.querySelector('.navigation-controls').style.display = 'flex';
+        } else {
+          document.querySelector('.navigation-controls').style.display = 'none';
+        }
+        
+        // Update UI to reflect correct status
+        updateUI(currentState);
+        sendResponse({success: true});
+      }).catch(error => {
+        console.error("Error updating position:", error);
+        sendResponse({success: false, error: error.message});
+      });
     });
+    return true; // Keep message channel open for async response
   }
   
   if (message.action === "updateHTMLStatus") {
-    chrome.tabs.query({active: true, currentWindow: true}, async function(tabs) {
+    chrome.tabs.query({active: true, currentWindow: true}, function(tabs) {
       const tab = tabs[0];
-      const data = await chrome.storage.session.get(`tab_${tab.id}_state`);
-      const currentState = data[`tab_${tab.id}_state`];
-      
-      currentState.htmlProcessingStatus = message.status;
-      if (message.status === 'ready') {
-        currentState.lastProcessedHTML = message.timestamp;
-      }
-      
-      await chrome.storage.session.set({[`tab_${tab.id}_state`]: currentState});
-      
-      // Update UI
-      const statusText = document.getElementById('statusText');
-      if (statusText) {
-        let statusMessage = '';
-        switch(message.status) {
-          case 'processing':
-            statusMessage = 'Getting ready...';
-            break;
-          case 'ready':
-            statusMessage = 'Ready';
-            break;
-          case 'error':
-            statusMessage = 'Error processing page';
-            break;
+      let currentState;
+      chrome.storage.session.get(`tab_${tab.id}_state`).then(data => {
+        currentState = data[`tab_${tab.id}_state`];
+        
+        currentState.htmlProcessingStatus = message.status;
+        if (message.status === 'ready') {
+          currentState.lastProcessedHTML = message.timestamp;
         }
-        statusText.textContent = statusMessage;
-      }
+        updateUI(currentState)
+        return chrome.storage.session.set({[`tab_${tab.id}_state`]: currentState});
+      }).then(() => {
+        // Only update UI with HTML status message if not in the middle of a search
+        const searchInProgress = currentState.searchState && 
+                                (currentState.searchState.searchStatus === 'searching' || 
+                                 currentState.searchState.searchStatus === 'showing_results');
+                                 
+        if (!searchInProgress) {
+          // Update UI
+          const statusText = document.getElementById('statusText');
+          if (statusText) {
+            let statusMessage = '';
+            switch(message.status) {
+              case 'processing':
+                statusMessage = 'Getting ready...';
+                break;
+              case 'ready':
+                statusMessage = 'Ready';
+                break;
+              case 'error':
+                statusMessage = 'Error processing page';
+                break;
+            }
+            statusText.textContent = statusMessage;
+          }
+        } else {
+          // If search is in progress, call updateUI to ensure proper status display
+          updateUI(currentState);
+        }
+        sendResponse({success: true});
+      }).catch(error => {
+        console.error("Error updating HTML status:", error);
+        sendResponse({success: false, error: error.message});
+      });
     });
+    return true; // Keep message channel open for async response
   }
   
   if (message.action === "stateChanged") {
@@ -229,14 +444,56 @@ chrome.runtime.onMessage.addListener((message) => {
     chrome.tabs.query({active: true, currentWindow: true}, function(tabs) {
       // Only update if popup is open
       if (tabs && tabs.length > 0) {
-        chrome.storage.session.get(`tab_${tabs[0].id}_state`, function(data) {
+        chrome.storage.session.get(`tab_${tabs[0].id}_state`).then(data => {
           const tabState = data[`tab_${tabs[0].id}_state`];
           if (tabState) {
             updateUI(tabState);
           }
+          sendResponse({success: true});
+        }).catch(error => {
+          console.error("Error handling state change:", error);
+          sendResponse({success: false, error: error.message});
         });
+      } else {
+        sendResponse({success: true, message: "No active tabs"});
       }
     });
+    return true; // Keep message channel open for async response
+  }
+
+  if (message.action === "searchComplete") {
+    chrome.tabs.query({active: true, currentWindow: true}, function(tabs) {
+      const tab = tabs[0];
+      
+      // Only update if this message is for the current tab
+      if (message.tabId !== tab.id) {
+        sendResponse({success: false, message: "Tab ID mismatch"});
+        return;
+      }
+      
+      let currentState;
+      chrome.storage.session.get(`tab_${tab.id}_state`).then(data => {
+        currentState = data[`tab_${tab.id}_state`];
+        
+        // If there are search results, highlight the first element
+        if (currentState.searchState && 
+            currentState.searchState.searchResults && 
+            currentState.searchState.searchResults.length > 0 &&
+            currentState.searchState.searchStatus === 'showing_results') {
+          highlightElementAtIndex(0, tab.id);
+        }
+        
+        return chrome.storage.session.set({[`tab_${tab.id}_state`]: currentState});
+      }).then(() => {
+        // Update UI
+        updateUI(currentState);
+        sendResponse({success: true});
+      }).catch(error => {
+        console.error("Error completing search:", error);
+        sendResponse({success: false, error: error.message});
+      });
+    });
+    return true; // Keep message channel open for async response
   }
 });
 
