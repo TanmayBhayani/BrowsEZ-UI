@@ -7,11 +7,11 @@
     "activeTab",
     "tabs",
     "storage",
-    "cookies"
+    "cookies",
+    "scripting"
   ],
   "host_permissions": [
-    "http://127.0.0.1/*",
-    "https://127.0.0.1/*"
+    "<all_urls>"
   ],
   "background": {
     "service_worker": "background.js"

@@ -18,6 +18,73 @@ function isDomainActive(url) {
     }
 }
 
+// Function to programmatically inject content scripts to a tab
+async function injectContentScriptsToTab(tabId) {
+  try {
+    // First inject seedrandom.min.js
+    await chrome.scripting.executeScript({
+      target: { tabId },
+      files: ['seedrandom.min.js']
+    });
+    
+    // Then inject content.js
+    await chrome.scripting.executeScript({
+      target: { tabId },
+      files: ['content.js']
+    });
+    
+    console.log(`Successfully injected content scripts to tab ${tabId}`);
+    return true;
+  } catch (err) {
+    console.log(`Error injecting content scripts to tab ${tabId}:`, err);
+    return false;
+  }
+}
+
+// Function to inject content scripts to all relevant tabs
+async function injectContentScriptsToAllTabs() {
+  try {
+    const tabs = await chrome.tabs.query({});
+    for (const tab of tabs) {
+      // Only inject to http/https URLs, not to chrome:// pages etc.
+      if (tab.url && (tab.url.startsWith('http://') || tab.url.startsWith('https://'))) {
+        await injectContentScriptsToTab(tab.id);
+      }
+    }
+  } catch (err) {
+    console.error('Error injecting content scripts to tabs:', err);
+  }
+}
+
+// Improved function to send messages to tabs with error handling
+function sendMessageToTab(tabId, message) {
+  return new Promise((resolve) => {
+    chrome.tabs.sendMessage(tabId, message, (response) => {
+      if (chrome.runtime.lastError) {
+        // If the content script isn't ready, inject it and try again
+        injectContentScriptsToTab(tabId).then(success => {
+          if (success) {
+            // Try sending the message again after a delay
+            setTimeout(() => {
+              chrome.tabs.sendMessage(tabId, message, (retryResponse) => {
+                if (chrome.runtime.lastError) {
+                  resolve({success: false, error: chrome.runtime.lastError.message});
+                } else {
+                  resolve({success: true, response: retryResponse});
+                }
+              });
+            }, 500);
+          } else {
+            resolve({success: false, error: 'Failed to inject content scripts'});
+          }
+        });
+      } else {
+        resolve({success: true, response});
+      }
+    });
+  });
+}
+
 // Initialize session and load domains when extension starts
 chrome.runtime.onInstalled.addListener(() => {
   //First check if we have active domains in chrome storage, if not set chrome storage to empty array
@@ -56,9 +123,15 @@ chrome.runtime.onStartup.addListener(() => {
 });
 
 // Function to initialize all tab states based on active domains
-function initializeAllTabStates() {
-  chrome.tabs.query({}, (tabs) => {
-    tabs.forEach(tab => {
+async function initializeAllTabStates() {
+  try {
+    // First inject content scripts to all tabs to ensure they're ready
+    await injectContentScriptsToAllTabs();
+    
+    // After scripts are injected, proceed with tab state initialization
+    const tabs = await new Promise(resolve => chrome.tabs.query({}, resolve));
+    
+    for (const tab of tabs) {
       if (tab.url) {
         try {
           const isActive = isDomainActive(tab.url);
@@ -91,8 +164,10 @@ function initializeAllTabStates() {
           console.error("Error initializing tab state:", e);
         }
       }
-    });
-  });
+    }
+  } catch (error) {
+    console.error("Error in initializeAllTabStates:", error);
+  }
 }
 
 // Check each tab when it's updated
