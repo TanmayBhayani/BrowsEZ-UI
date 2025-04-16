@@ -217,7 +217,7 @@ chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
               currentState.htmlProcessingStatus = 'error';
               chrome.storage.session.set({ [`tab_${tabId}_state`]: currentState });
               chrome.runtime.sendMessage({
-                action: "updateHTMLStatus",
+                action: "updateStatus",
                 status: 'error',
                 tabId: tabId
               });
@@ -280,7 +280,7 @@ async function sendHTMLToServer(html, tabId) {
       currentState.htmlProcessingStatus = 'processing';
       chrome.storage.session.set({ [`tab_${tabId}_state`]: currentState });
       chrome.runtime.sendMessage({
-        action: "updateHTMLStatus",
+        action: "updateStatus",
         status: 'processing',
         tabId: tabId
       });
@@ -314,7 +314,7 @@ async function sendHTMLToServer(html, tabId) {
       currentState.lastProcessedHTML = new Date().toISOString();
       chrome.storage.session.set({ [`tab_${tabId}_state`]: currentState });
       chrome.runtime.sendMessage({
-        action: "updateHTMLStatus",
+        action: "updateStatus",
         status: 'ready',
         timestamp: currentState.lastProcessedHTML,
         tabId: tabId
@@ -336,13 +336,11 @@ async function sendHTMLToServer(html, tabId) {
         currentState.htmlProcessingStatus = 'error';
         chrome.storage.session.set({ [`tab_${tabId}_state`]: currentState });
         chrome.runtime.sendMessage({
-          action: "updateHTMLStatus",
+          action: "updateStatus",
           status: 'error',
           tabId: tabId
         });
       });
-      
-      throw error;
     }
   }
 }
@@ -382,7 +380,8 @@ async function searchToServer(searchString, tabId, useLlmFiltering = true) {
         currentPosition: 0, // Reset to 0 as nothing is highlighted yet
         totalResults: data.searchResults.metadatas[0].length,
         searchStatus: 'showing_results',
-        searchResults: data.searchResults.metadatas[0] // Store the full search results in tab state
+        searchResults: data.searchResults.metadatas[0], // Store the full search results in tab state
+        navigationLinks: data.navigationLinks || [] // Store navigation links in tab state
       }
     };
     
@@ -407,6 +406,31 @@ async function searchToServer(searchString, tabId, useLlmFiltering = true) {
       }
     } else {
       console.error('Error searching on server:', error);
+      
+      // Update the tab state to indicate search error
+      try {
+        // Get current tab state
+        const data = await chrome.storage.session.get(`tab_${tabId}_state`);
+        const currentState = data[`tab_${tabId}_state`];
+        
+        // Set search status to error while keeping htmlProcessingStatus as is
+        if (!currentState.searchState) {
+          currentState.searchState = {};
+        }
+        currentState.searchState.searchStatus = 'error';
+        
+        // Save updated state
+        await chrome.storage.session.set({ [`tab_${tabId}_state`]: currentState });
+        
+        // Notify popup to update UI
+        chrome.runtime.sendMessage({
+          action: "updateStatus",
+          tabId: tabId
+        });
+      } catch (stateError) {
+        console.error('Error updating tab state:', stateError);
+      }
+      
       throw error;
     }
   }

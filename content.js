@@ -104,6 +104,12 @@ chrome.runtime.onMessage.addListener(function(request, sender, sendResponse) {
     sendResponse({ success: true });
     return true;
   }
+  else if (request.action === "navigateToLink") {
+    // Handle navigation to link when clicked in popup
+    navigateToLink(request.elementId, request.href);
+    sendResponse({ success: true });
+    return true;
+  }
   return true;
 });
 
@@ -155,6 +161,42 @@ function removeAllHighlights() {
   
   // Remove any existing tooltips
   document.querySelectorAll('.extension-tooltip').forEach(tip => tip.remove());
+}
+
+function navigateToLink(elementId, href) {
+  // Remove any existing highlights first
+  removeAllHighlights();
+  
+  // Find the link element by its data-element-id attribute
+  const linkElement = document.querySelector(`[data-element-id="${elementId}"]`);
+  
+  if (linkElement) {
+    // Highlight the link element
+    linkElement.classList.add('extension-highlight');
+    
+    // Scroll the link into view
+    linkElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    
+    // If href is provided and the link has an href attribute, we could optionally navigate to it
+    // For now, we'll let the user click it manually after highlighting it
+    
+    // Create a brief tooltip to indicate this is a clickable link
+    const tooltip = document.createElement('div');
+    tooltip.className = 'extension-tooltip';
+    tooltip.textContent = 'Click to navigate to this link';
+    
+    // Position the tooltip near the element
+    const rect = linkElement.getBoundingClientRect();
+    tooltip.style.top = `${rect.bottom + window.scrollY + 5}px`;
+    tooltip.style.left = `${rect.left + window.scrollX}px`;
+    
+    document.body.appendChild(tooltip);
+    
+    // Remove tooltip after 3 seconds
+    setTimeout(() => {
+      tooltip.remove();
+    }, 3000);
+  }
 }
 
 if (document.readyState === 'loading') {

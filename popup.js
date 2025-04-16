@@ -200,6 +200,56 @@ function updateUI(tabState) {
     const isProcessing = tabState.htmlProcessingStatus === 'processing';
     const isSearching = tabState.searchState && tabState.searchState.searchStatus === 'searching';
     
+    // Display navigation links if they exist
+    const navigationLinks = tabState.searchState && tabState.searchState.navigationLinks;
+    const navigationLinksContainer = document.getElementById('navigation-links-container');
+    const navigationLinksList = document.getElementById('navigation-links-list');
+    
+    if (navigationLinks && navigationLinks.length > 0) {
+      // Show the navigation links container
+      navigationLinksContainer.style.display = 'block';
+      
+      // Clear existing links
+      navigationLinksList.innerHTML = '';
+      
+      // Add navigation links to the list
+      navigationLinks.forEach((link, index) => {
+        const linkItem = document.createElement('div');
+        linkItem.className = 'navigation-link-item';
+        linkItem.dataset.elementId = link.element_id;
+        linkItem.dataset.href = link.href;
+        linkItem.dataset.linkIndex = index;
+        
+        const linkIcon = document.createElement('span');
+        linkIcon.className = 'navigation-link-icon';
+        linkIcon.innerHTML = '🔗';
+        
+        const linkText = document.createElement('span');
+        linkText.className = 'navigation-link-text';
+        linkText.textContent = link.text || 'Link ' + (index + 1);
+        
+        linkItem.appendChild(linkIcon);
+        linkItem.appendChild(linkText);
+        
+        // Add click event listener to navigate to the link
+        linkItem.addEventListener('click', () => {
+          chrome.tabs.query({active: true, currentWindow: true}, function(tabs) {
+            const tab = tabs[0];
+            chrome.tabs.sendMessage(tab.id, { 
+              action: "navigateToLink", 
+              elementId: link.element_id,
+              href: link.href
+            });
+          });
+        });
+        
+        navigationLinksList.appendChild(linkItem);
+      });
+    } else {
+      // Hide the navigation links container if no links
+      navigationLinksContainer.style.display = 'none';
+    }
+    
     if (isProcessing || isSearching) {
       searchBar.disabled = true;
       searchBar.style.backgroundColor = LIGHT_GRAY;
@@ -254,15 +304,24 @@ function updateUI(tabState) {
   // Update status text based on HTML processing status and search status
   let statusMessage = '';
   
-  if (tabState.searchState && tabState.searchState.searchStatus === 'searching') {
-    statusMessage = 'Searching...';
-  } else if (tabState.searchState && tabState.searchState.searchStatus === 'showing_results') {
-    if (tabState.searchState.totalResults > 0) {
-      statusMessage = 'Results';
-    } else {
-      statusMessage = 'No relevant Result Found';
+  // First check if there's a search state with status
+  if (tabState.searchState) {
+    if (tabState.searchState.searchStatus === 'searching') {
+      statusMessage = 'Searching...';
+    } else if (tabState.searchState.searchStatus === 'showing_results') {
+      if (tabState.searchState.totalResults > 0) {
+        statusMessage = 'Results';
+      } else {
+        statusMessage = 'No relevant Result Found';
+      }
+    } else if (tabState.searchState.searchStatus === 'error') {
+      // Handle search error - this occurs when htmlProcessingStatus is still 'ready'
+      statusMessage = 'Error processing Search';
     }
-  } else {
+  }
+  
+  // If no search status message set yet, use HTML processing status
+  if (!statusMessage) {
     switch(tabState.htmlProcessingStatus) {
       case 'processing':
         statusMessage = 'Getting ready...';
@@ -389,52 +448,25 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     return true; // Keep message channel open for async response
   }
   
-  if (message.action === "updateHTMLStatus") {
+  if (message.action === "updateStatus") {
     chrome.tabs.query({active: true, currentWindow: true}, function(tabs) {
       const tab = tabs[0];
-      let currentState;
-      chrome.storage.session.get(`tab_${tab.id}_state`).then(data => {
-        currentState = data[`tab_${tab.id}_state`];
-        
-        currentState.htmlProcessingStatus = message.status;
-        if (message.status === 'ready') {
-          currentState.lastProcessedHTML = message.timestamp;
-        }
-        updateUI(currentState)
-        return chrome.storage.session.set({[`tab_${tab.id}_state`]: currentState});
-      }).then(() => {
-        // Only update UI with HTML status message if not in the middle of a search
-        const searchInProgress = currentState.searchState && 
-                                (currentState.searchState.searchStatus === 'searching' || 
-                                 currentState.searchState.searchStatus === 'showing_results');
-                                 
-        if (!searchInProgress) {
-          // Update UI
-          const statusText = document.getElementById('statusText');
-          if (statusText) {
-            let statusMessage = '';
-            switch(message.status) {
-              case 'processing':
-                statusMessage = 'Getting ready...';
-                break;
-              case 'ready':
-                statusMessage = 'Ready';
-                break;
-              case 'error':
-                statusMessage = 'Error processing page';
-                break;
-            }
-            statusText.textContent = statusMessage;
-          }
-        } else {
-          // If search is in progress, call updateUI to ensure proper status display
+      
+      // Only proceed if message is for the current active tab
+      if (tab.id === message.tabId) {
+        chrome.storage.session.get(`tab_${tab.id}_state`).then(data => {
+          // Simply pass the current state to updateUI without modifying it
+          const currentState = data[`tab_${tab.id}_state`];
           updateUI(currentState);
-        }
+          sendResponse({success: true});
+        }).catch(error => {
+          console.error("Error retrieving tab state for updateStatus:", error);
+          sendResponse({success: false, error: error.message});
+        });
+      } else {
+        // Message is for a different tab, ignore
         sendResponse({success: true});
-      }).catch(error => {
-        console.error("Error updating HTML status:", error);
-        sendResponse({success: false, error: error.message});
-      });
+      }
     });
     return true; // Keep message channel open for async response
   }

@@ -200,6 +200,64 @@ body {
   opacity: 0.7;
 }
 
+/* Navigation links container styling */
+.navigation-links-container {
+  margin-top: 12px;
+  background: var(--light-gray);
+  border-radius: var(--border-radius);
+  padding: 10px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+}
+
+.navigation-links-container h3 {
+  margin: 0 0 8px 0;
+  font-size: 14px;
+  color: #555;
+  font-weight: 600;
+}
+
+.navigation-links-list {
+  max-height: 150px;
+  overflow-y: auto;
+  border-radius: 6px;
+  background: white;
+  border: 1px solid var(--border-color);
+}
+
+.navigation-link-item {
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--border-color);
+  cursor: pointer;
+  transition: all 0.2s;
+  font-size: 13px;
+  display: flex;
+  align-items: center;
+}
+
+.navigation-link-item:last-child {
+  border-bottom: none;
+}
+
+.navigation-link-item:hover {
+  background-color: rgba(74, 144, 226, 0.1);
+}
+
+.navigation-link-item:active {
+  background-color: rgba(74, 144, 226, 0.2);
+}
+
+.navigation-link-icon {
+  margin-right: 8px;
+  color: var(--primary-color);
+  flex-shrink: 0;
+}
+
+.navigation-link-text {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
 /* LLM Toggle Styles */
 .llm-toggle-container {
   display: flex;
