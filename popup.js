@@ -29,6 +29,9 @@ document.addEventListener('DOMContentLoaded', function() {
   messageContainer.style.display = 'none';
   toggleButton.parentNode.insertBefore(messageContainer, statusText);
   
+  // Reference to the LLM answer container
+  const llmAnswerContainer = document.getElementById('llm-answer-container');
+
   // Load the current state
   chrome.tabs.query({active: true, currentWindow: true}, function(tabs) {
     const tab = tabs[0];
@@ -145,6 +148,12 @@ document.addEventListener('DOMContentLoaded', function() {
       return;
     }
     
+    // Hide LLM answer while searching
+    if (llmAnswerContainer) {
+      llmAnswerContainer.style.display = 'none';
+      llmAnswerContainer.textContent = '';
+    }
+    
     const searchString = searchBar.value.trim();
     console.log("Search string:", searchString);
     
@@ -188,8 +197,17 @@ document.addEventListener('DOMContentLoaded', function() {
 });
 
 function updateUI(tabState) {
+  const llmAnswerContainer = document.getElementById('llm-answer-container');
   toggleButton.textContent = tabState.isActive ? 'Deactivate' : 'Activate';
   toggleButton.style.backgroundColor = tabState.isActive ? RED : BLUE;
+  
+  // Handle LLM answer display
+  if (tabState.isActive && tabState.searchState && tabState.searchState.llmAnswer) {
+    llmAnswerContainer.textContent = tabState.searchState.llmAnswer;
+    llmAnswerContainer.style.display = 'block';
+  } else {
+    llmAnswerContainer.style.display = 'none';
+  }
   
   // Handle search bar visibility
   if (tabState.isActive) {

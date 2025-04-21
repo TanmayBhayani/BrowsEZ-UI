@@ -176,26 +176,20 @@ chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
   if (changeInfo.status === 'complete' && tab.url) {
     // Check if this domain is active
     const isActive = isDomainActive(tab.url);
-    
-    // Get current state
-    chrome.storage.session.get(`tab_${tabId}_state`, function(data) {
-      const currentState = data[`tab_${tabId}_state`] || {
-        isActive: false,
-        htmlProcessingStatus: 'not_sent',
-        searchState : {
-          searchStatus: 'idle',
-          lastSearch: null,
-          currentPosition: 0,
-          totalResults: 0
-        }
-      };
-      
-      // Update state
-      const newState = {
-        ...currentState,
-        isActive: isActive,
-        htmlProcessingStatus: isActive ? 'processing' : 'not_sent'
-      };
+    //Resetting State
+    newState = {
+      isActive: isActive,
+      htmlProcessingStatus: 'not_sent',
+      lastProcessedHTML: null,
+      searchState : {
+        searchStatus: 'idle',
+        lastSearch: null,
+        navigationLinks: [],
+        searchResults: [],
+        currentPosition: 0,
+        totalResults: 0
+      }
+    };
       
       // Store the updated state
       chrome.storage.session.set({ [`tab_${tabId}_state`]: newState });
@@ -224,7 +218,6 @@ chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
             });
           });
       }
-    });
   }
 });
 
@@ -381,7 +374,8 @@ async function searchToServer(searchString, tabId, useLlmFiltering = true) {
         totalResults: data.searchResults.metadatas[0].length,
         searchStatus: 'showing_results',
         searchResults: data.searchResults.metadatas[0], // Store the full search results in tab state
-        navigationLinks: data.navigationLinks || [] // Store navigation links in tab state
+        navigationLinks: data.navigationLinks || [], // Store navigation links in tab state
+        llmAnswer: data.llmAnswer || '' // Store LLM answer if present
       }
     };
     
