@@ -4,7 +4,7 @@
   <link rel="stylesheet" href="popup.css">
   <style>
     body { 
-      width: 320px;
+      width: 300px;
       padding: 0;
       margin: 0;
       font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
@@ -38,18 +38,29 @@
     
     <div class="content">
       <button id="toggleButton">Activate</button>
-      <!-- LLM Answer container -->
-      <div id="llm-answer-container" class="llm-answer-container" style="display: none; margin: 16px 0; padding: 10px; background: #f0f8ff; border-radius: 8px; border: 1px solid #cce4ff; color: #1a3a5d; font-size: 14px;"></div>
+      
+      <!-- LLM Answer collapsible container -->
+      <div class="collapsible-container">
+        <div class="collapsible-header" id="llm-answer-header">
+          <span>AI Response</span>
+          <span class="collapse-icon">▼</span>
+        </div>
+        <div id="llm-answer-container" class="llm-answer-container collapsible-content" style="display: none;"></div>
+      </div>
+      
       <div class="navigation-controls">
         <button id="prevButton">< Previous</button>
         <span id="position-counter">1/1</span>
         <button id="nextButton">Next ></button>
       </div>
       
-      <!-- Navigation links container -->
-      <div id="navigation-links-container" class="navigation-links-container" style="display: none;">
-        <h3>Navigation Links</h3>
-        <div id="navigation-links-list" class="navigation-links-list">
+      <!-- Navigation links collapsible container -->
+      <div class="collapsible-container" id="navigation-links-container" style="display: none;">
+        <div class="collapsible-header" id="navigation-links-header">
+          <span>Navigation Links</span>
+          <span class="collapse-icon">▼</span>
+        </div>
+        <div id="navigation-links-list" class="navigation-links-list collapsible-content">
           <!-- Navigation links will be added here dynamically -->
         </div>
       </div>

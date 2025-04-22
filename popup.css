@@ -9,15 +9,16 @@
   --success-color: #4caf50;
   --danger-color: #e57373;
   --shadow-color: rgba(74, 144, 226, 0.2);
-  --border-radius: 10px;
+  --border-radius: 8px;
 }
 
 body {
   color: var(--text-color);
   background: white;
-  line-height: 1.5;
+  line-height: 1.4;
   margin: 0;
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
+  font-size: 13px;
 }
 
 /* Container styling */
@@ -26,15 +27,15 @@ body {
   flex-direction: column;
   height: 100%;
   overflow: hidden;
-  border-radius: 8px;
-  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.05);
+  border-radius: 6px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
 }
 
 /* Top bar styling */
 .top-bar {
   display: flex;
   align-items: center;
-  padding: 12px;
+  padding: 8px;
   background: var(--light-gray);
   border-bottom: 1px solid var(--border-color);
 }
@@ -43,7 +44,7 @@ body {
   background: none;
   border: none;
   cursor: pointer;
-  padding: 8px;
+  padding: 6px;
   border-radius: 50%;
   transition: all 0.2s ease;
   margin-left: 5px;
@@ -64,7 +65,7 @@ body {
 
 /* Content area styling */
 .content {
-  padding: 14px;
+  padding: 10px;
   background-color: white;
 }
 
@@ -101,38 +102,39 @@ body {
 /* Active/deactivate button styling */
 #toggleButton {
   width: 100%;
-  padding: 12px 0;
+  padding: 8px 0;
   background: var(--primary-color);
   color: white;
   border: none;
   border-radius: var(--border-radius);
-  font-size: 14px;
+  font-size: 13px;
   font-weight: 600;
   cursor: pointer;
   transition: all 0.2s ease;
-  margin-bottom: 8px;
-  box-shadow: 0 2px 5px var(--shadow-color);
+  margin-bottom: 6px;
+  box-shadow: 0 1px 3px var(--shadow-color);
 }
 
 #toggleButton:hover {
   background: var(--primary-dark);
   transform: translateY(-1px);
-  box-shadow: 0 4px 8px var(--shadow-color);
+  box-shadow: 0 2px 5px var(--shadow-color);
 }
 
 /* Status text styling */
 #statusText {
   text-align: center;
-  font-size: 13px !important;
+  font-size: 12px !important;
   color: #666 !important;
-  margin: 10px 0;
+  margin: 6px 0;
   font-style: italic;
 }
 
 #message-container {
   text-align: center;
   color: var(--primary-color) !important;
-  margin: 10px 0;
+  margin: 6px 0;
+  font-size: 12px;
   font-style: italic;
 }
 
@@ -141,23 +143,23 @@ body {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  margin-top: 12px;
+  margin-top: 8px;
   background: var(--light-gray);
   border-radius: var(--border-radius);
-  padding: 8px;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.03);
+  padding: 5px;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.03);
 }
 
 .navigation-controls button {
   background: white;
   border: 1px solid var(--border-color);
-  border-radius: 6px;
-  padding: 8px 14px;
+  border-radius: 4px;
+  padding: 5px 10px;
   cursor: pointer;
-  font-size: 13px;
+  font-size: 12px;
   transition: all 0.2s;
   flex: 1;
-  margin: 0 4px;
+  margin: 0 3px;
   font-weight: 500;
 }
 
@@ -176,11 +178,11 @@ body {
 }
 
 #position-counter {
-  font-size: 13px;
+  font-size: 12px;
   font-weight: 600;
   color: #666;
-  padding: 0 10px;
-  min-width: 40px;
+  padding: 0 8px;
+  min-width: 32px;
   text-align: center;
 }
 
@@ -188,11 +190,11 @@ body {
 #searchForm::after {
   content: '';
   position: absolute;
-  right: 15px;
+  right: 12px;
   top: 50%;
   transform: translateY(-50%);
-  width: 16px;
-  height: 16px;
+  width: 14px;
+  height: 14px;
   background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='20' height='20' viewBox='0 0 24 24' fill='none' stroke='%234a90e2' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Ccircle cx='11' cy='11' r='8'%3E%3C/circle%3E%3Cline x1='21' y1='21' x2='16.65' y2='16.65'%3E%3C/line%3E%3C/svg%3E");
   background-repeat: no-repeat;
   background-size: contain;
@@ -200,36 +202,77 @@ body {
   opacity: 0.7;
 }
 
-/* Navigation links container styling */
-.navigation-links-container {
-  margin-top: 12px;
+/* Collapsible containers styling */
+.collapsible-container {
+  margin-top: 8px;
   background: var(--light-gray);
   border-radius: var(--border-radius);
-  padding: 10px;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+  border: 1px solid var(--border-color);
+  overflow: hidden;
 }
 
-.navigation-links-container h3 {
-  margin: 0 0 8px 0;
-  font-size: 14px;
-  color: #555;
-  font-weight: 600;
+.collapsible-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 6px 10px;
+  background-color: var(--light-gray);
+  cursor: pointer;
+  font-weight: 500;
+  font-size: 12px;
+  transition: all 0.2s;
+  border-bottom: 1px solid var(--border-color);
 }
 
-.navigation-links-list {
+.collapsible-header:hover {
+  background-color: rgba(74, 144, 226, 0.1);
+}
+
+.collapse-icon {
+  font-size: 10px;
+  color: #666;
+  transition: transform 0.3s;
+}
+
+.collapsed .collapse-icon {
+  transform: rotate(-90deg);
+}
+
+.collapsible-content {
   max-height: 150px;
   overflow-y: auto;
-  border-radius: 6px;
+  transition: max-height 0.3s ease-out;
+}
+
+.collapsed .collapsible-content {
+  max-height: 0;
+  overflow: hidden;
+}
+
+/* LLM Answer container styling */
+.llm-answer-container {
+  padding: 8px;
+  background: #f0f8ff;
+  border-radius: 4px;
+  border: 1px solid #cce4ff;
+  color: #1a3a5d;
+  font-size: 12px;
+  margin: 0;
+}
+
+/* Navigation links styling */
+.navigation-links-list {
+  max-height: 120px;
+  overflow-y: auto;
   background: white;
-  border: 1px solid var(--border-color);
 }
 
 .navigation-link-item {
-  padding: 8px 10px;
+  padding: 6px 8px;
   border-bottom: 1px solid var(--border-color);
   cursor: pointer;
   transition: all 0.2s;
-  font-size: 13px;
+  font-size: 12px;
   display: flex;
   align-items: center;
 }
@@ -247,7 +290,7 @@ body {
 }
 
 .navigation-link-icon {
-  margin-right: 8px;
+  margin-right: 6px;
   color: var(--primary-color);
   flex-shrink: 0;
 }
@@ -263,17 +306,17 @@ body {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 8px 15px;
+  padding: 6px 10px;
   background-color: #f8f9fa;
   border-bottom: 1px solid #e0e0e0;
-  font-size: 13px;
+  font-size: 12px;
 }
 
 .toggle-switch {
   position: relative;
   display: inline-block;
-  width: 40px;
-  height: 20px;
+  width: 36px;
+  height: 18px;
 }
 
 .toggle-switch input {
@@ -297,8 +340,8 @@ body {
 .toggle-slider:before {
   position: absolute;
   content: "";
-  height: 16px;
-  width: 16px;
+  height: 14px;
+  width: 14px;
   left: 2px;
   bottom: 2px;
   background-color: white;
@@ -311,5 +354,5 @@ input:checked + .toggle-slider {
 }
 
 input:checked + .toggle-slider:before {
-  transform: translateX(20px);
+  transform: translateX(18px);
 }

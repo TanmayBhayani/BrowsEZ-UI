@@ -13,6 +13,10 @@ document.addEventListener('DOMContentLoaded', function() {
   const llmToggle = document.getElementById('llm-toggle');
   const llmToggleContainer = document.querySelector('.llm-toggle-container');
   
+  // Collapsible elements
+  const llmAnswerHeader = document.getElementById('llm-answer-header');
+  const navigationLinksHeader = document.getElementById('navigation-links-header');
+  
   statusText.id = 'statusText';
   statusText.style.marginTop = '10px';
   statusText.style.fontSize = '12px';
@@ -31,6 +35,15 @@ document.addEventListener('DOMContentLoaded', function() {
   
   // Reference to the LLM answer container
   const llmAnswerContainer = document.getElementById('llm-answer-container');
+
+  // Set up collapsible functionality
+  llmAnswerHeader.addEventListener('click', function() {
+    toggleCollapsible(this);
+  });
+  
+  navigationLinksHeader.addEventListener('click', function() {
+    toggleCollapsible(this);
+  });
 
   // Load the current state
   chrome.tabs.query({active: true, currentWindow: true}, function(tabs) {
@@ -196,166 +209,176 @@ document.addEventListener('DOMContentLoaded', function() {
   });
 });
 
+// Function to toggle collapsible sections
+function toggleCollapsible(header) {
+  const container = header.closest('.collapsible-container');
+  const content = container.querySelector('.collapsible-content');
+  const icon = header.querySelector('.collapse-icon');
+  
+  if (container.classList.contains('collapsed')) {
+    // Expand
+    container.classList.remove('collapsed');
+    content.style.display = 'block';
+    icon.textContent = '▼';
+  } else {
+    // Collapse
+    container.classList.add('collapsed');
+    content.style.display = 'none';
+    icon.textContent = '►';
+  }
+}
+
 function updateUI(tabState) {
+  // Get UI elements
+  const searchBar = document.getElementById('searchBar');
   const llmAnswerContainer = document.getElementById('llm-answer-container');
+  const llmAnswerHeader = document.getElementById('llm-answer-header');
+  const llmAnswerSection = llmAnswerHeader.closest('.collapsible-container');
+  const messageContainer = document.getElementById('message-container');
+  const positionCounter = document.getElementById('position-counter');
+  const navigationControls = document.querySelector('.navigation-controls');
+  const navigationLinksContainer = document.getElementById('navigation-links-container');
+  const navigationLinksList = document.getElementById('navigation-links-list');
+  const statusText = document.getElementById('statusText');
+  
+  // Update toggle button state
   toggleButton.textContent = tabState.isActive ? 'Deactivate' : 'Activate';
   toggleButton.style.backgroundColor = tabState.isActive ? RED : BLUE;
   
-  // Handle LLM answer display
-  if (tabState.isActive && tabState.searchState && tabState.searchState.llmAnswer) {
-    llmAnswerContainer.textContent = tabState.searchState.llmAnswer;
-    llmAnswerContainer.style.display = 'block';
-  } else {
-    llmAnswerContainer.style.display = 'none';
-  }
-  
-  // Handle search bar visibility
-  if (tabState.isActive) {
-    searchBar.style.display = 'block';
-    searchBar.placeholder = 'Find...';
-    
-    // Disable search bar when processing or searching
-    const isProcessing = tabState.htmlProcessingStatus === 'processing';
-    const isSearching = tabState.searchState && tabState.searchState.searchStatus === 'searching';
-    
-    // Display navigation links if they exist
-    const navigationLinks = tabState.searchState && tabState.searchState.navigationLinks;
-    const navigationLinksContainer = document.getElementById('navigation-links-container');
-    const navigationLinksList = document.getElementById('navigation-links-list');
-    
-    if (navigationLinks && navigationLinks.length > 0) {
-      // Show the navigation links container
-      navigationLinksContainer.style.display = 'block';
-      
-      // Clear existing links
-      navigationLinksList.innerHTML = '';
-      
-      // Add navigation links to the list
-      navigationLinks.forEach((link, index) => {
-        const linkItem = document.createElement('div');
-        linkItem.className = 'navigation-link-item';
-        linkItem.dataset.elementId = link.element_id;
-        linkItem.dataset.href = link.href;
-        linkItem.dataset.linkIndex = index;
-        
-        const linkIcon = document.createElement('span');
-        linkIcon.className = 'navigation-link-icon';
-        linkIcon.innerHTML = '🔗';
-        
-        const linkText = document.createElement('span');
-        linkText.className = 'navigation-link-text';
-        linkText.textContent = link.text || 'Link ' + (index + 1);
-        
-        linkItem.appendChild(linkIcon);
-        linkItem.appendChild(linkText);
-        
-        // Add click event listener to navigate to the link
-        linkItem.addEventListener('click', () => {
-          chrome.tabs.query({active: true, currentWindow: true}, function(tabs) {
-            const tab = tabs[0];
-            chrome.tabs.sendMessage(tab.id, { 
-              action: "navigateToLink", 
-              elementId: link.element_id,
-              href: link.href
-            });
-          });
-        });
-        
-        navigationLinksList.appendChild(linkItem);
-      });
-    } else {
-      // Hide the navigation links container if no links
-      navigationLinksContainer.style.display = 'none';
-    }
-    
-    if (isProcessing || isSearching) {
-      searchBar.disabled = true;
-      searchBar.style.backgroundColor = LIGHT_GRAY;
-      searchBar.style.cursor = 'not-allowed';
-      searchBar.style.opacity = '0.7';
-    } else {
-      searchBar.disabled = false;
-      searchBar.style.backgroundColor = '';
-      searchBar.style.cursor = '';
-      searchBar.style.opacity = '';
-    }
-  } else {
-    searchBar.style.display = 'none';
-    searchBar.placeholder = 'Find...';
-  }
-  
-  // Handle search icon via CSS
+  // Setup dynamic CSS for search icon
   const styleElement = document.getElementById('dynamic-styles') || document.createElement('style');
   if (!document.getElementById('dynamic-styles')) {
     styleElement.id = 'dynamic-styles';
     document.head.appendChild(styleElement);
   }
-  
   styleElement.textContent = `
     #searchForm::after {
       display: ${tabState.isActive ? 'block' : 'none'};
     }
   `;
   
-  statusText.style.display = tabState.isActive ? 'block' : 'none';
+  // Handle active/inactive state
+  if (!tabState.isActive) {
+    // Hide everything when inactive
+    searchBar.style.display = 'none';
+    llmAnswerSection.style.display = 'none';
+    navigationControls.style.display = 'none';
+    navigationLinksContainer.style.display = 'none';
+    statusText.style.display = 'none';
+    if (messageContainer) messageContainer.style.display = 'none';
+    return;
+  }
   
-  // Handle message container
-  const messageContainer = document.getElementById('message-container');
-  if (messageContainer && tabState.isActive && 
-      tabState.searchState && 
-      tabState.searchState.message) {
+  // Tab is active - proceed with showing UI elements
+  searchBar.style.display = 'block';
+  searchBar.placeholder = 'Find...';
+  statusText.style.display = 'block';
+  
+  // Disable search bar when processing or searching
+  const isProcessing = tabState.htmlProcessingStatus === 'processing';
+  const isSearching = tabState.searchState && tabState.searchState.searchStatus === 'searching';
+  
+  if (isProcessing || isSearching) {
+    searchBar.disabled = true;
+    searchBar.style.backgroundColor = LIGHT_GRAY;
+    searchBar.style.cursor = 'not-allowed';
+    searchBar.style.opacity = '0.7';
+  } else {
+    searchBar.disabled = false;
+    searchBar.style.backgroundColor = '';
+    searchBar.style.cursor = '';
+    searchBar.style.opacity = '';
+  }
+  
+  // Handle status message
+  let statusMessage = '';
+  if (tabState.searchState) {
+    if (tabState.searchState.searchStatus === 'searching') {
+      statusMessage = 'Searching...';
+    } else if (tabState.searchState.searchStatus === 'showing_results') {
+      statusMessage = tabState.searchState.totalResults > 0 ? 'Results' : 'No relevant Result Found';
+    } else if (tabState.searchState.searchStatus === 'error') {
+      statusMessage = 'Error processing Search';
+    }
+  }
+  
+  if (!statusMessage) {
+    switch(tabState.htmlProcessingStatus) {
+      case 'processing': statusMessage = 'Getting ready...'; break;
+      case 'ready': statusMessage = 'Ready'; break;
+      case 'error': statusMessage = 'Error processing page'; break;
+      default: statusMessage = '';
+    }
+  }
+  statusText.textContent = statusMessage;
+  
+  // Handle search results message
+  if (messageContainer && tabState.searchState && tabState.searchState.message) {
     messageContainer.textContent = tabState.searchState.message;
     messageContainer.style.display = 'block';
   } else if (messageContainer) {
     messageContainer.style.display = 'none';
   }
   
-  // Hide the position counter if not active or no search results
-  const positionCounter = document.getElementById('position-counter');
-  const navigationControls = document.querySelector('.navigation-controls');
-  const hasSearchResults = tabState.isActive && 
-                          tabState.searchState && 
-                          tabState.searchState.totalResults > 0;
-  
+  // Handle search results navigation
+  const hasSearchResults = tabState.searchState && tabState.searchState.totalResults > 0;
   navigationControls.style.display = hasSearchResults ? 'flex' : 'none';
   
-  // Update status text based on HTML processing status and search status
-  let statusMessage = '';
-  
-  // First check if there's a search state with status
-  if (tabState.searchState) {
-    if (tabState.searchState.searchStatus === 'searching') {
-      statusMessage = 'Searching...';
-    } else if (tabState.searchState.searchStatus === 'showing_results') {
-      if (tabState.searchState.totalResults > 0) {
-        statusMessage = 'Results';
-      } else {
-        statusMessage = 'No relevant Result Found';
-      }
-    } else if (tabState.searchState.searchStatus === 'error') {
-      // Handle search error - this occurs when htmlProcessingStatus is still 'ready'
-      statusMessage = 'Error processing Search';
-    }
+  // Handle LLM answer display
+  if (tabState.searchState && tabState.searchState.llmAnswer) {
+    llmAnswerContainer.textContent = tabState.searchState.llmAnswer;
+    llmAnswerContainer.style.display = 'block';
+    llmAnswerSection.style.display = 'block';
+  } else {
+    llmAnswerSection.style.display = 'none';
   }
   
-  // If no search status message set yet, use HTML processing status
-  if (!statusMessage) {
-    switch(tabState.htmlProcessingStatus) {
-      case 'processing':
-        statusMessage = 'Getting ready...';
-        break;
-      case 'ready':
-        statusMessage = 'Ready';
-        break;
-      case 'error':
-        statusMessage = 'Error processing page';
-        break;
-      default:
-        statusMessage = '';
-    }
+  // Handle navigation links
+  const navigationLinks = tabState.searchState && tabState.searchState.navigationLinks;
+  if (navigationLinks && navigationLinks.length > 0) {
+    // Show the navigation links container
+    navigationLinksContainer.style.display = 'block';
+    
+    // Clear existing links
+    navigationLinksList.innerHTML = '';
+    
+    // Add navigation links to the list
+    navigationLinks.forEach((link, index) => {
+      const linkItem = document.createElement('div');
+      linkItem.className = 'navigation-link-item';
+      linkItem.dataset.elementId = link.element_id;
+      linkItem.dataset.href = link.href;
+      linkItem.dataset.linkIndex = index;
+      
+      const linkIcon = document.createElement('span');
+      linkIcon.className = 'navigation-link-icon';
+      linkIcon.innerHTML = '🔗';
+      
+      const linkText = document.createElement('span');
+      linkText.className = 'navigation-link-text';
+      linkText.textContent = link.text || 'Link ' + (index + 1);
+      
+      linkItem.appendChild(linkIcon);
+      linkItem.appendChild(linkText);
+      
+      // Add click event listener to navigate to the link
+      linkItem.addEventListener('click', () => {
+        chrome.tabs.query({active: true, currentWindow: true}, function(tabs) {
+          const tab = tabs[0];
+          chrome.tabs.sendMessage(tab.id, { 
+            action: "navigateToLink", 
+            elementId: link.element_id,
+            href: link.href
+          });
+        });
+      });
+      
+      navigationLinksList.appendChild(linkItem);
+    });
+  } else {
+    // Hide the navigation links container if no links
+    navigationLinksContainer.style.display = 'none';
   }
-  
-  statusText.textContent = statusMessage;
 }
 
 // Function to highlight a specific element by index
@@ -387,7 +410,7 @@ function highlightElementAtIndex(index, tabId) {
     document.getElementById('position-counter').textContent = 
       `${index + 1}/${tabState.searchState.totalResults}`;
     
-    updateUI(tabState);
+    // updateUI(tabState);
   });
 }
 
