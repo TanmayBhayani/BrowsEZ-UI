@@ -207,6 +207,9 @@ document.addEventListener('DOMContentLoaded', function() {
       }
     }
   });
+  
+  // Initialize collapsible containers to collapsed state
+  initializeCollapsibles();
 });
 
 // Function to toggle collapsible sections
@@ -226,6 +229,22 @@ function toggleCollapsible(header) {
     content.style.display = 'none';
     icon.textContent = '►';
   }
+}
+
+// Function to initialize collapsible containers
+function initializeCollapsibles() {
+  const collapsibles = document.querySelectorAll('.collapsible-container');
+  collapsibles.forEach(container => {
+    // Set initial state to collapsed
+    const header = container.querySelector('.collapsible-header');
+    const content = container.querySelector('.collapsible-content');
+    const icon = header.querySelector('.collapse-icon');
+    
+    // Start collapsed by default
+    container.classList.add('collapsed');
+    content.style.display = 'none';
+    icon.textContent = '►';
+  });
 }
 
 function updateUI(tabState) {
@@ -326,9 +345,18 @@ function updateUI(tabState) {
   
   // Handle LLM answer display
   if (tabState.searchState && tabState.searchState.llmAnswer) {
-    llmAnswerContainer.textContent = tabState.searchState.llmAnswer;
-    llmAnswerContainer.style.display = 'block';
+    // Show the section container
     llmAnswerSection.style.display = 'block';
+    
+    // Always update the content text
+    llmAnswerContainer.textContent = tabState.searchState.llmAnswer;
+    
+    // Control visibility of the content based on collapsed state
+    if (llmAnswerSection.classList.contains('collapsed')) {
+      llmAnswerContainer.style.display = 'none';
+    } else {
+      llmAnswerContainer.style.display = 'block';
+    }
   } else {
     llmAnswerSection.style.display = 'none';
   }
@@ -339,7 +367,7 @@ function updateUI(tabState) {
     // Show the navigation links container
     navigationLinksContainer.style.display = 'block';
     
-    // Clear existing links
+    // Always clear and populate the links, regardless of collapsed state
     navigationLinksList.innerHTML = '';
     
     // Add navigation links to the list
@@ -375,6 +403,13 @@ function updateUI(tabState) {
       
       navigationLinksList.appendChild(linkItem);
     });
+    
+    // Control visibility of the content based on collapsed state
+    if (navigationLinksContainer.classList.contains('collapsed')) {
+      navigationLinksList.style.display = 'none';
+    } else {
+      navigationLinksList.style.display = 'block';
+    }
   } else {
     // Hide the navigation links container if no links
     navigationLinksContainer.style.display = 'none';
@@ -396,10 +431,16 @@ function highlightElementAtIndex(index, tabId) {
     // Get the element to highlight
     const elementToHighlight = tabState.searchState.searchResults[index];
     
+    // Check if the element is a link by looking for href or a elements
+    const isLink = elementToHighlight.tag === 'a' || 
+                   elementToHighlight.attributes?.href || 
+                   elementToHighlight.element_type === 'link';
+    
     // Send message to content script to highlight this specific element
     chrome.tabs.sendMessage(tabId, {
       action: "highlightElement",
-      element: elementToHighlight
+      element: elementToHighlight,
+      isLink: isLink
     });
     
     // Update the current position in the state

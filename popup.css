@@ -10,6 +10,11 @@
   --danger-color: #e57373;
   --shadow-color: rgba(74, 144, 226, 0.2);
   --border-radius: 8px;
+  --highlight-element-color: rgba(74, 144, 226, 0.3);
+  --highlight-element-border: rgba(74, 144, 226, 0.8);
+  --highlight-link-color: rgba(126, 87, 194, 0.25);
+  --highlight-link-border: rgba(126, 87, 194, 0.7);
+  --highlight-animation-duration: 0.5s;
 }
 
 body {
@@ -317,6 +322,7 @@ body {
   display: inline-block;
   width: 36px;
   height: 18px;
+  margin: 0 10px 0 auto;
 }
 
 .toggle-switch input {
@@ -355,4 +361,51 @@ input:checked + .toggle-slider {
 
 input:checked + .toggle-slider:before {
   transform: translateX(18px);
+}
+
+/* Style injected into the page for highlighted elements */
+.find-extension-highlight {
+  background-color: var(--highlight-element-color) !important;
+  border: 2px solid var(--highlight-element-border) !important;
+  border-radius: 4px !important;
+  box-shadow: 0 0 8px rgba(74, 144, 226, 0.4) !important;
+  transition: all 0.2s ease-in-out !important;
+  animation: element-pulse var(--highlight-animation-duration) ease-in-out !important;
+}
+
+/* Style for highlighted links */
+.find-extension-highlight-link {
+  background-color: var(--highlight-link-color) !important;
+  border: 2px solid var(--highlight-link-border) !important;
+  border-radius: 4px !important;
+  box-shadow: 0 0 8px rgba(126, 87, 194, 0.4) !important;
+  transition: all 0.2s ease-in-out !important;
+  animation: link-pulse var(--highlight-animation-duration) ease-in-out !important;
+  text-decoration: underline !important;
+}
+
+/* Pulse animation for standard elements */
+@keyframes element-pulse {
+  0% { box-shadow: 0 0 0 rgba(74, 144, 226, 0); }
+  50% { box-shadow: 0 0 12px rgba(74, 144, 226, 0.6); }
+  100% { box-shadow: 0 0 8px rgba(74, 144, 226, 0.4); }
+}
+
+/* Pulse animation for links */
+@keyframes link-pulse {
+  0% { box-shadow: 0 0 0 rgba(126, 87, 194, 0); }
+  50% { box-shadow: 0 0 12px rgba(126, 87, 194, 0.6); }
+  100% { box-shadow: 0 0 8px rgba(126, 87, 194, 0.4); }
+}
+
+/* Special highlight style for the currently active element */
+.find-extension-highlight-active {
+  background-color: rgba(74, 144, 226, 0.4) !important;
+  box-shadow: 0 0 12px rgba(74, 144, 226, 0.7) !important;
+}
+
+/* Special highlight style for the currently active link */
+.find-extension-highlight-link-active {
+  background-color: rgba(126, 87, 194, 0.35) !important;
+  box-shadow: 0 0 12px rgba(126, 87, 194, 0.7) !important;
 }
