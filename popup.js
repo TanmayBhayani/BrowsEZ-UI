@@ -200,8 +200,6 @@ document.addEventListener('DOMContentLoaded', function() {
           tabUrl: tab.url,
           useLlmFiltering: useLlmFiltering
         });
-        
-        searchBar.value = ''; // Clear the search bar
       } catch (error) {
         console.error("Error during search:", error);
       }
@@ -210,6 +208,60 @@ document.addEventListener('DOMContentLoaded', function() {
   
   // Initialize collapsible containers to collapsed state
   initializeCollapsibles();
+  
+  // Add clear search functionality
+  document.addEventListener('click', async function(e) {
+    // Since we can't directly access the ::after pseudo-element,
+    // we need to check if the click is within the search form area and near the X icon
+    const searchForm = document.getElementById('searchForm');
+    
+    // Get the search form's position and dimensions
+    const searchFormRect = searchForm.getBoundingClientRect();
+    const iconArea = {
+      left: searchFormRect.right - 30, // 30px from the right edge includes the icon
+      right: searchFormRect.right,
+      top: searchFormRect.top,
+      bottom: searchFormRect.bottom
+    };
+    
+    // Check if the click is within the icon area
+    if (e.clientX >= iconArea.left && e.clientX <= iconArea.right &&
+        e.clientY >= iconArea.top && e.clientY <= iconArea.bottom) {
+        
+      // Check if we're currently showing results
+      const [tab] = await chrome.tabs.query({active: true, currentWindow: true});
+      const data = await chrome.storage.session.get(`tab_${tab.id}_state`);
+      const currentState = data[`tab_${tab.id}_state`];
+      
+      if (currentState.searchState && currentState.searchState.searchStatus === 'showing_results') {
+        try {
+          // Reset search state
+          currentState.searchState = {
+            lastSearch: null,
+            currentPosition: 0,
+            totalResults: 0,
+            searchStatus: 'idle',
+            searchResults: []
+          };
+          
+          // Clear the search bar
+          const searchBar = document.getElementById('searchBar');
+          searchBar.value = '';
+          
+          // Update the state in storage
+          await chrome.storage.session.set({[`tab_${tab.id}_state`]: currentState});
+          
+          // Update UI
+          updateUI(currentState);
+          
+          // Remove highlights from the page
+          await chrome.tabs.sendMessage(tab.id, { action: "removeHighlights" });
+        } catch (error) {
+          console.error("Error clearing search:", error);
+        }
+      }
+    }
+  });
 });
 
 // Function to toggle collapsible sections
@@ -250,6 +302,7 @@ function initializeCollapsibles() {
 function updateUI(tabState) {
   // Get UI elements
   const searchBar = document.getElementById('searchBar');
+  const searchForm = document.getElementById('searchForm');
   const llmAnswerContainer = document.getElementById('llm-answer-container');
   const llmAnswerHeader = document.getElementById('llm-answer-header');
   const llmAnswerSection = llmAnswerHeader.closest('.collapsible-container');
@@ -264,17 +317,53 @@ function updateUI(tabState) {
   toggleButton.textContent = tabState.isActive ? 'Deactivate' : 'Activate';
   toggleButton.style.backgroundColor = tabState.isActive ? RED : BLUE;
   
-  // Setup dynamic CSS for search icon
+  // Setup dynamic CSS for search icon/clear button
   const styleElement = document.getElementById('dynamic-styles') || document.createElement('style');
   if (!document.getElementById('dynamic-styles')) {
     styleElement.id = 'dynamic-styles';
     document.head.appendChild(styleElement);
   }
+  
+  // Check if we have search results showing
+  const isShowingResults = tabState.isActive && 
+                           tabState.searchState && 
+                           tabState.searchState.searchStatus === 'showing_results';
+  
+  // Show search icon or clear icon based on search state
   styleElement.textContent = `
     #searchForm::after {
       display: ${tabState.isActive ? 'block' : 'none'};
+      content: '';
+      position: absolute;
+      right: 12px;
+      top: 50%;
+      transform: translateY(-50%);
+      width: 14px;
+      height: 14px;
+      background-image: url("${isShowingResults ? 
+        "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='20' height='20' viewBox='0 0 24 24' fill='none' stroke='%23e57373' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cline x1='18' y1='6' x2='6' y2='18'%3E%3C/line%3E%3Cline x1='6' y1='6' x2='18' y2='18'%3E%3C/line%3E%3C/svg%3E" : 
+        "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='20' height='20' viewBox='0 0 24 24' fill='none' stroke='%234a90e2' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Ccircle cx='11' cy='11' r='8'%3E%3C/circle%3E%3Cline x1='21' y1='21' x2='16.65' y2='16.65'%3E%3C/line%3E%3C/svg%3E"}");
+      background-repeat: no-repeat;
+      background-size: contain;
+      pointer-events: ${isShowingResults ? 'auto' : 'none'};
+      cursor: ${isShowingResults ? 'pointer' : 'default'};
+    }
+    
+    #searchForm::after {
+      ${isShowingResults ? 'z-index: 10; cursor: pointer;' : ''}
+    }
+    
+    #searchForm::after:hover {
+      ${isShowingResults ? 'opacity: 1;' : ''}
     }
   `;
+  
+  // Add or remove class for the clear button
+  if (isShowingResults) {
+    searchForm.classList.add('showing-results');
+  } else {
+    searchForm.classList.remove('showing-results');
+  }
   
   // Handle active/inactive state
   if (!tabState.isActive) {
