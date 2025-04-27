@@ -83,7 +83,14 @@ async function processPage() {
     const tabId = await chrome.runtime.sendMessage({action: "getTabId"});
     rng = new Math.seedrandom(tabId.toString());
     addDataAttributesToElements(document.body);
-    // HTML sending is now handled by the background script when requested
+    
+    // Gather HTML and send it to background script
+    const html = document.documentElement.outerHTML;
+    chrome.runtime.sendMessage({
+      action: "sendHTML",
+      html: html,
+      url: window.location.href
+    });
   } catch (error) {
     console.error("Error getting tab ID:", error);
   }

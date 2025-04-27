@@ -151,15 +151,6 @@ async function initializeAllTabStates() {
           
           // Store the default state
           chrome.storage.session.set({ [`tab_${tab.id}_state`]: defaultState });
-          
-          // If domain is active, we should request HTML
-          if (isActive) {
-            // Give the content script time to initialize
-            setTimeout(() => {
-              chrome.tabs.sendMessage(tab.id, { action: "sendHTML" })
-                .catch(err => console.log(`Could not send message to tab ${tab.id}:`, err));
-            }, 1000);
-          }
         } catch (e) {
           console.error("Error initializing tab state:", e);
         }
@@ -169,57 +160,6 @@ async function initializeAllTabStates() {
     console.error("Error in initializeAllTabStates:", error);
   }
 }
-
-// Check each tab when it's updated
-chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
-  // Only process when page is fully loaded (complete) and has a URL
-  if (changeInfo.status === 'complete' && tab.url) {
-    // Check if this domain is active
-    const isActive = isDomainActive(tab.url);
-    //Resetting State
-    newState = {
-      isActive: isActive,
-      htmlProcessingStatus: 'not_sent',
-      lastProcessedHTML: null,
-      searchState : {
-        searchStatus: 'idle',
-        lastSearch: null,
-        navigationLinks: [],
-        searchResults: [],
-        currentPosition: 0,
-        totalResults: 0
-      }
-    };
-      
-      // Store the updated state
-      chrome.storage.session.set({ [`tab_${tabId}_state`]: newState });
-      
-      // If domain is active, fetch the HTML and send to server
-      if (isActive) {
-        console.log(`Tab ${tabId} updated with active domain. Fetching HTML...`);
-        chrome.tabs.sendMessage(tabId, { action: "getPageHTML" })
-          .then(response => {
-            if (response && response.html) {
-              return sendHTMLToServer(response.html, tabId);
-            }
-          })
-          .catch(error => {
-            console.error("Error sending/processing message:", error);
-            // Update state to error
-            chrome.storage.session.get(`tab_${tabId}_state`, function(data) {
-              const currentState = data[`tab_${tabId}_state`];
-              currentState.htmlProcessingStatus = 'error';
-              chrome.storage.session.set({ [`tab_${tabId}_state`]: currentState });
-              chrome.runtime.sendMessage({
-                action: "updateStatus",
-                status: 'error',
-                tabId: tabId
-              });
-            });
-          });
-      }
-  }
-});
 
 // Clean up tab data when a tab is closed
 chrome.tabs.onRemoved.addListener((tabId) => {
@@ -526,8 +466,33 @@ function cleanupOrphanedTabRecords() {
 // Message listener for MV3
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   if (request.action === "sendHTML") {
-    if (isDomainActive(sender.tab.url)) {
-      sendHTMLToServer(request.html, sender.tab.id)
+    if (sender.tab && isDomainActive(sender.tab.url || request.url)) {
+      const tabId = sender.tab.id;
+      
+      // Update state to processing
+      chrome.storage.session.get(`tab_${tabId}_state`, function(data) {
+        const currentState = data[`tab_${tabId}_state`] || {
+          isActive: true,
+          htmlProcessingStatus: 'processing',
+          lastProcessedHTML: null,
+          searchState: {
+            searchStatus: 'idle',
+            lastSearch: null,
+            navigationLinks: [],
+            searchResults: [],
+            currentPosition: 0,
+            totalResults: 0
+          }
+        };
+        chrome.storage.session.set({ [`tab_${tabId}_state`]: currentState });
+        chrome.runtime.sendMessage({
+          action: "updateStatus",
+          status: 'processing',
+          tabId: tabId
+        });
+      });
+      
+      sendHTMLToServer(request.html, tabId)
         .then(result => sendResponse(result))
         .catch(error => sendResponse({ error: error.message }));
       return true; // Required for async response
