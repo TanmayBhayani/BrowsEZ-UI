@@ -313,6 +313,11 @@ function updateUI(tabState) {
   const navigationLinksList = document.getElementById('navigation-links-list');
   const statusText = document.getElementById('statusText');
   
+  // Restore last search text if available
+  if (tabState.searchState && tabState.searchState.lastSearch) {
+    searchBar.value = tabState.searchState.lastSearch;
+  }
+  
   // Update toggle button state
   toggleButton.textContent = tabState.isActive ? 'Deactivate' : 'Activate';
   toggleButton.style.backgroundColor = tabState.isActive ? RED : BLUE;
