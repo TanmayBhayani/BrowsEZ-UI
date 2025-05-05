@@ -3,6 +3,18 @@
 // Store active domains locally as an Array for storage compatibility
 let activeDomains = [];
 
+let defaultTabState = {
+  isActive: false,
+  htmlProcessingStatus: 'not_sent',
+  lastProcessedHTML: null,
+  searchState: {
+    lastSearch: null,
+    currentPosition: 0,
+    totalResults: 0,
+    searchStatus: 'idle'
+  }
+};
+
 // Check if current domain is active
 function isDomainActive(url) {
     if (!url) return false;
@@ -125,9 +137,6 @@ chrome.runtime.onStartup.addListener(() => {
 // Function to initialize all tab states based on active domains
 async function initializeAllTabStates() {
   try {
-    // First inject content scripts to all tabs to ensure they're ready
-    await injectContentScriptsToAllTabs();
-    
     // After scripts are injected, proceed with tab state initialization
     const tabs = await new Promise(resolve => chrome.tabs.query({}, resolve));
     
@@ -137,17 +146,8 @@ async function initializeAllTabStates() {
           const isActive = isDomainActive(tab.url);
           
           // Create default state for the tab
-          const defaultState = {
-            isActive: isActive,
-            htmlProcessingStatus: 'not_sent',
-            lastProcessedHTML: null,
-            searchState: {
-              lastSearch: null,
-              currentPosition: 0,
-              totalResults: 0,
-              searchStatus: 'idle'
-            }
-          };
+          const defaultState = defaultTabState;
+          defaultState.isActive = isActive;
           
           // Store the default state
           chrome.storage.session.set({ [`tab_${tab.id}_state`]: defaultState });
@@ -156,6 +156,7 @@ async function initializeAllTabStates() {
         }
       }
     }
+    await injectContentScriptsToAllTabs();
   } catch (error) {
     console.error("Error in initializeAllTabStates:", error);
   }
