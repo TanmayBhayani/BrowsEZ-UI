@@ -61,7 +61,7 @@ document.head.appendChild(style);
 async function cleanupSession() {
   const sessionId = sessionStorage.getItem('currentSessionId');
   if (sessionId) {
-      await fetch('http://127.0.0.1:5000/cleanup_session', {
+      await fetch('http://hopper.proxy.rlwy.net:18019/cleanup_session', {
           method: 'POST',
           headers: {
               'Content-Type': 'application/json',

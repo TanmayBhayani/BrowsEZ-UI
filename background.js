@@ -176,7 +176,7 @@ chrome.tabs.onRemoved.addListener((tabId) => {
 
 async function initializeSession(retryCount = 0) {
     try {
-        const response = await fetch('http://127.0.0.1:5000/initialize_session', {
+        const response = await fetch('https://find-production.up.railway.app/initialize_session', {
             method: 'POST',
             credentials: 'include', 
             headers: {
@@ -191,7 +191,7 @@ async function initializeSession(retryCount = 0) {
       
         // Check all cookies
         const cookies = await chrome.cookies.getAll({
-            domain: "127.0.0.1"
+            domain: "find-production.up.railway.app"
         });
         console.log('All cookies:', cookies);
         return data;
@@ -220,7 +220,7 @@ async function sendHTMLToServer(html, tabId) {
       });
     });
 
-    const response = await fetch('http://127.0.0.1:5000/receive_html', {
+    const response = await fetch('https://find-production.up.railway.app/receive_html', {
       method: 'POST',
       credentials: 'include',
       headers: {
@@ -286,7 +286,7 @@ async function searchToServer(searchString, tabId, useLlmFiltering = true) {
   });
   
   try {
-    const response = await fetch(`http://127.0.0.1:5000/search?${searchParams.toString()}`, {
+    const response = await fetch(`https://find-production.up.railway.app/search?${searchParams.toString()}`, {
       method: 'GET',
       credentials: 'include',
       headers: {
