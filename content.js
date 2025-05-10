@@ -61,7 +61,7 @@ document.head.appendChild(style);
 async function cleanupSession() {
   const sessionId = sessionStorage.getItem('currentSessionId');
   if (sessionId) {
-      await fetch('http://hopper.proxy.rlwy.net:18019/cleanup_session', {
+      await fetch('http://find-production.up.railway.app/cleanup_session', {
           method: 'POST',
           headers: {
               'Content-Type': 'application/json',
