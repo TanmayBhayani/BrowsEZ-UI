@@ -1,34 +1,39 @@
 {
   "manifest_version": 3,
-  "name": "Find",
+  "name": "BrowsEZ",
   "version": "1.0",
-  "description": "A search bar to find what you want in a website",
+  "description": "Browser Assistant",
   "permissions": [
+    "storage",
     "activeTab",
     "tabs",
-    "storage",
+    "scripting",
     "cookies",
-    "scripting"
+    "sidePanel"
   ],
   "host_permissions": [
+    "https://find-production.up.railway.app/*",
     "<all_urls>"
   ],
   "background": {
-    "service_worker": "background.js"
+    "service_worker": "background.js",
+    "type": "module"
   },
   "action": {
-    "default_popup": "popup.html",
-    "default_title": "Find"
+    "default_title": "Open BrowsEZ sidebar"
+  },
+  "side_panel": {
+    "default_path": "sidebar_ui/dist/index.html"
   },
   "content_scripts": [
     {
       "matches": ["<all_urls>"],
-      "js": ["seedrandom.min.js", "content.js"]
+      "js": ["seedrandom.min.js", "dist/content-entry.js"]
     }
   ],
   "web_accessible_resources": [
     {
-      "resources": ["settings.html", "settings.css", "settings.js"],
+      "resources": ["dist/content-entry.js"],
       "matches": ["<all_urls>"]
     }
   ]

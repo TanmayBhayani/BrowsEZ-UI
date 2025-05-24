@@ -1,3 +1,6 @@
+// content.js starts here - typesShared.js has already been loaded by the manifest
+// BrowsEZ namespace is now globally available with all utility functions and constants
+
 let highlightedElement = null;
 const style = document.createElement('style');
 
@@ -58,17 +61,22 @@ style.textContent = `
 document.head.appendChild(style);
 
 
-async function cleanupSession() {
+async function cleanupSessionOnUnload() {
   const sessionId = sessionStorage.getItem('currentSessionId');
   if (sessionId) {
-      await fetch('http://find-production.up.railway.app/cleanup_session', {
-          method: 'POST',
-          headers: {
-              'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({ session_id: sessionId })
-      });
-      sessionStorage.removeItem('currentSessionId');
+    try {
+      // Send message to background script to handle the fetch call for cleanup
+      console.log("Content.js: Requesting session cleanup from background script for session:", sessionId);
+      
+      const message = window.BrowsEZ.createContentToBackgroundMessage(
+        window.BrowsEZ.MessageActions.CLEANUP_SESSION, 
+        { sessionId }
+      );
+      
+      await chrome.runtime.sendMessage(message);
+    } catch (error) {
+      console.error("Content.js: Error sending cleanupSessionOnServer message:", error);
+    }
   }
 }
 
@@ -80,17 +88,18 @@ function generateUniqueId() {
 
 async function processPage() {
   try {
-    const tabId = await chrome.runtime.sendMessage({action: "getTabId"});
+    // Get the tab ID from background script
+    const message = window.BrowsEZ.createContentToBackgroundMessage(
+      window.BrowsEZ.MessageActions.GET_TAB_ID
+    );
+    
+    const tabId = await chrome.runtime.sendMessage(message);
     rng = new Math.seedrandom(tabId.toString());
     addDataAttributesToElements(document.body);
-    
     // Gather HTML and send it to background script
     const html = document.documentElement.outerHTML;
-    chrome.runtime.sendMessage({
-      action: "sendHTML",
-      html: html,
-      url: window.location.href
-    });
+    sendHTMLToBackground(html);
+    console.log("HTML sent for tab:", tabId," to background script");
   } catch (error) {
     console.error("Error getting tab ID:", error);
   }
@@ -106,46 +115,58 @@ function addDataAttributesToElements(element, prefix = '') {
     }
   }
 }
-function sendHTMLToBackend(html) {
-  chrome.runtime.sendMessage({
-    action: "sendHTML",
-    html: html,
-    url: window.location.href
-  });
+function sendHTMLToBackground(html) {
+  const message = window.BrowsEZ.createContentToBackgroundMessage(
+    window.BrowsEZ.MessageActions.SEND_HTML,
+    {
+      html: html,
+      url: window.location.href
+    }
+  );
+  
+  chrome.runtime.sendMessage(message);
 }
 
 chrome.runtime.onMessage.addListener(function(request, sender, sendResponse) {
   console.log('Message received in content script:', request);
   
-  if (request.action === "highlightElement") {
-    highlightElement(request.element, request.isLink);
+  // Use our standardized action constants
+  const { MessageActions } = window.BrowsEZ;
+  
+  if (request.action === MessageActions.HIGHLIGHT_ELEMENT) {
+    console.log("Highlighting element:", request.element);
+    const highlighted = highlightElement(request.element, request.isLink);
+    sendResponse({ success: highlighted, message: highlighted ? "Element highlighted" : "Element not found" });
+    return true;
   }
-  else if (request.action === "removeHighlights") {
+  else if (request.action === MessageActions.REMOVE_HIGHLIGHTS) {
     removeAllHighlights();
     highlightedElement = null;
+    sendResponse({ success: true });
+    return true;
   }
-  else if (request.action === "getPageHTML") {
+  else if (request.action === MessageActions.GET_PAGE_HTML) {
     // When background.js requests the HTML, we prepare and send it
     addDataAttributesToElements(document.body);
     const html = document.documentElement.outerHTML;
     sendResponse({ html: html });
     return true;
   }
-  else if (request.action === "sendHTML") {
+  else if (request.action === MessageActions.SEND_HTML) {
     // The content script already has the DOM context
     addDataAttributesToElements(document.body);
     const html = document.documentElement.outerHTML;
-    sendHTMLToBackend(html);
+    sendHTMLToBackground(html);
     sendResponse({ success: true });
     return true;
   }
-  else if (request.action === "navigateToLink") {
+  else if (request.action === MessageActions.NAVIGATE_TO_LINK) {
     // Handle navigation to link when clicked in popup
     navigateToLink(request.elementId, request.href);
     sendResponse({ success: true });
     return true;
   }
-  return true;
+  return false; // Default if no specific async action taken that requires returning true.
 });
 
 function highlightElement(elementMetadata, isLink = false) {
@@ -155,18 +176,25 @@ function highlightElement(elementMetadata, isLink = false) {
   // Store the current element metadata
   highlightedElement = elementMetadata;
   
+  // Log element ID for debugging
+  console.log("Looking for element with ID:", elementMetadata.element_id);
+  
+  // Try to find the element by its data-element-id
   const element = document.querySelector(
     `[data-element-id="${elementMetadata.element_id}"]`
   );
   
   if (element) {
+    console.log("Element found:", element);
+    
     // Add the appropriate highlight class based on whether it's a link
-    if (isLink || element.tagName === 'a' || element.hasAttribute('href')) {
+    if (isLink || element.tagName.toLowerCase() === 'a' || element.hasAttribute('href')) {
       element.classList.add('extension-highlight-link');
     } else {
       element.classList.add('extension-highlight');
     }
     
+    // Scroll the element into view
     element.scrollIntoView({behavior: "smooth", block: "center"});
     
     // Remove any existing tooltips
@@ -192,6 +220,78 @@ function highlightElement(elementMetadata, isLink = false) {
     tooltip.style.left = `${rect.left + window.scrollX}px`;
     
     document.body.appendChild(tooltip);
+    
+    return true; // Successfully highlighted
+  } else {
+    console.warn("Element with ID not found:", elementMetadata.element_id);
+    
+    // Try to find the element using XPath if element_id fails
+    // This is a fallback mechanism for when the page might have reloaded
+    // and the data-element-id attributes were regenerated
+    if (elementMetadata.xpath) {
+      try {
+        const result = document.evaluate(
+          elementMetadata.xpath, 
+          document, 
+          null, 
+          XPathResult.FIRST_ORDERED_NODE_TYPE, 
+          null
+        );
+        
+        if (result.singleNodeValue) {
+          const elementByXPath = result.singleNodeValue;
+          console.log("Element found by XPath:", elementByXPath);
+          
+          // Highlight the element
+          if (isLink || elementByXPath.tagName.toLowerCase() === 'a' || elementByXPath.hasAttribute('href')) {
+            elementByXPath.classList.add('extension-highlight-link');
+          } else {
+            elementByXPath.classList.add('extension-highlight');
+          }
+          
+          elementByXPath.scrollIntoView({behavior: "smooth", block: "center"});
+          return true;
+        }
+      } catch (e) {
+        console.error("XPath lookup failed:", e);
+      }
+    }
+    
+    // As a last resort, try simple text content matching if available
+    if (elementMetadata.text) {
+      // Get all text nodes
+      const walker = document.createTreeWalker(
+        document.body,
+        NodeFilter.SHOW_TEXT,
+        null,
+        false
+      );
+      
+      // Find nodes that contain the text
+      let node;
+      while (node = walker.nextNode()) {
+        if (node.textContent.includes(elementMetadata.text)) {
+          // Found a text node containing our text
+          const parentElement = node.parentElement;
+          if (parentElement) {
+            console.log("Element found by text content:", parentElement);
+            
+            // Highlight the parent element
+            if (isLink || parentElement.tagName.toLowerCase() === 'a' || parentElement.hasAttribute('href')) {
+              parentElement.classList.add('extension-highlight-link');
+            } else {
+              parentElement.classList.add('extension-highlight');
+            }
+            
+            parentElement.scrollIntoView({behavior: "smooth", block: "center"});
+            return true;
+          }
+        }
+      }
+    }
+    
+    console.error("Failed to find element with ID, XPath, or text content:", elementMetadata);
+    return false; // Element not found with any method
   }
 }
 
@@ -245,5 +345,5 @@ if (document.readyState === 'loading') {
 }
 
 // Add cleanup event listeners
-window.addEventListener('beforeunload', cleanupSession);
-window.addEventListener('unload', cleanupSession);
+window.addEventListener('beforeunload', cleanupSessionOnUnload);
+window.addEventListener('unload', cleanupSessionOnUnload); // unload might not always fire reliably
