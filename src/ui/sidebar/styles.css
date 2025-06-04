@@ -1,0 +1,210 @@
+/* Modern BrowsEZ Sidebar Styles */
+.app-container {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  background: #f8f9fa;
+}
+
+.chat-interface {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+
+.chat-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 1rem;
+  background: #007acc;
+  color: white;
+  border-bottom: 1px solid #005a9e;
+}
+
+.chat-header h3 {
+  margin: 0;
+  font-size: 1.2rem;
+  font-weight: 600;
+}
+
+.toggle-button {
+  padding: 0.5rem 1rem;
+  border: none;
+  border-radius: 4px;
+  font-size: 0.9rem;
+  cursor: pointer;
+  transition: background-color 0.2s;
+}
+
+.toggle-button.active {
+  background: rgba(255, 255, 255, 0.2);
+  color: white;
+}
+
+.toggle-button.inactive {
+  background: #28a745;
+  color: white;
+}
+
+.toggle-button:hover {
+  opacity: 0.8;
+}
+
+.toggle-button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.inactive-message {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  flex: 1;
+  padding: 2rem;
+  text-align: center;
+  color: #6c757d;
+}
+
+.inactive-icon {
+  font-size: 3rem;
+  margin-bottom: 1rem;
+}
+
+.inactive-message h4 {
+  margin: 0 0 0.5rem 0;
+  color: #495057;
+}
+
+.chat-view {
+  flex: 1;
+  overflow-y: auto;
+  padding: 1rem;
+  background: white;
+}
+
+.message {
+  margin-bottom: 1rem;
+  padding: 0.75rem;
+  border-radius: 8px;
+}
+
+.message.user {
+  background: #e3f2fd;
+  margin-left: 20%;
+}
+
+.message.assistant {
+  background: #f1f8e9;
+  margin-right: 20%;
+}
+
+.message.system {
+  background: #fff3e0;
+  text-align: center;
+  font-style: italic;
+}
+
+.navigation-controls {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  background: #e8f4f8;
+  padding: 0.75rem;
+  border-radius: 8px;
+  margin: 1rem 0;
+}
+
+.navigation-controls button {
+  padding: 0.5rem 1rem;
+  border: none;
+  border-radius: 4px;
+  background: #007acc;
+  color: white;
+  cursor: pointer;
+}
+
+.navigation-controls button:hover {
+  background: #005a9e;
+}
+
+.input-container {
+  border-top: 1px solid #dee2e6;
+  background: white;
+}
+
+.input-area {
+  padding: 1rem;
+}
+
+.search-type-selector {
+  display: flex;
+  gap: 1rem;
+  margin-bottom: 0.75rem;
+}
+
+.search-type-selector label {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  font-size: 0.9rem;
+  color: #495057;
+}
+
+.input-controls {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.input-controls input[type="text"] {
+  flex: 1;
+  padding: 0.75rem;
+  border: 1px solid #ced4da;
+  border-radius: 4px;
+  font-size: 0.9rem;
+}
+
+.input-controls button {
+  padding: 0.75rem 1rem;
+  border: none;
+  border-radius: 4px;
+  font-size: 0.9rem;
+  cursor: pointer;
+  transition: background-color 0.2s;
+}
+
+.input-controls button[type="submit"] {
+  background: #007acc;
+  color: white;
+}
+
+.input-controls button[type="button"] {
+  background: #6c757d;
+  color: white;
+}
+
+.input-controls button:hover {
+  opacity: 0.8;
+}
+
+.input-controls button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* Loading state */
+.loading {
+  background: #f8f9fa;
+}
+
+.loading-spinner {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 100vh;
+  gap: 1rem;
+  color: #6c757d;
+} 
