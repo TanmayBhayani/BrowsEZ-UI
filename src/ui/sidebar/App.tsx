@@ -17,16 +17,13 @@ const App: React.FC = () => {
   useEffect(() => {
     console.log("BrowsEZ Sidebar App: Triggering TabStore synchronization.");
     // initTabStoreSync is now async, so we handle the promise.
-    const initialize = async () => {
+    
       try {
-        await initTabStoreSync();
+        initTabStoreSync();
         console.log("BrowsEZ Sidebar App: TabStore synchronization process initiated.");
       } catch (error) {
         console.error("BrowsEZ Sidebar App: Error during TabStore synchronization initialization:", error);
       }
-    };
-
-    initialize();
 
     return () => {
       console.log("BrowsEZ Sidebar App: Cleaning up TabStore synchronization.");

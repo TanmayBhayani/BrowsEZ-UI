@@ -1,5 +1,6 @@
 import React from 'react';
 import { useTabStore, selectDisplayConversation } from '@shared/state/tabStore';
+import { formatLlmAnswer } from '../utils/formatLlmAnswer';
 
 interface ChatViewProps {
   onNavigate: (direction: 'next' | 'prev') => void;
@@ -20,7 +21,13 @@ export const ChatView: React.FC<ChatViewProps> = ({ onNavigate }) => {
               <button onClick={() => onNavigate('next')}>Next</button>
             </div>
           ) : (
-            <div className="message-content">{message.content}</div>
+            <div className="message-content">
+              {message.role === 'assistant' ? (
+                <div dangerouslySetInnerHTML={{ __html: formatLlmAnswer(message.content) }} />
+              ) : (
+                message.content
+              )}
+            </div>
           )}
         </div>
       ))}

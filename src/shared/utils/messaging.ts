@@ -4,13 +4,9 @@ import type {
   MessageType, 
   MessageSource, 
   MessageTarget,
-  SearchPayload,
-  HighlightPayload,
-  NavigationPayload,
-  SendHtmlPayload,
-  CleanupSessionPayload,
-  NavigateToLinkPayload,
+  MessageSchema,
 } from '@shared/types/messages';
+import type { TabState } from '@shared/types/extension';
 
 export class TypedMessenger {
   private static responseCallbacks = new Map<string, (response: MessageResponse) => void>();
@@ -18,54 +14,53 @@ export class TypedMessenger {
   /**
    * Send a typed message with automatic response handling
    */
-  static async send<TPayload = any, TResponse = any>(
-    type: MessageType,
-    payload: TPayload,
+  static async send<T extends MessageType>(
+    type: T,
+    payload: MessageSchema[T]['payload'],
     source: MessageSource,
-    target: MessageTarget = 'background'
-  ): Promise<MessageResponse<TResponse>> {
-    const message: BaseMessage<TPayload> = {
+    target: MessageTarget = 'background',
+    tabId?: number
+  ): Promise<MessageResponse<MessageSchema[T]['response']>> {
+    const message: BaseMessage<MessageSchema[T]['payload']> = {
       type,
       payload,
       source,
       target,
-      timestamp: new Date().toISOString(),
-      requestId: Math.random().toString(36).substr(2, 9),
+      tabId,
     };
 
     try {
       // Handle different contexts
       if (typeof chrome !== 'undefined' && chrome.runtime) {
         if (target === 'content') {
-          // Send to specific tab's content script
-          const tabs = await chrome.tabs.query({ active: true, currentWindow: true });
-          if (tabs[0]) {
-            return new Promise((resolve) => {
-              chrome.tabs.sendMessage(tabs[0].id!, message, (response) => {
-                if (chrome.runtime.lastError) {
-                  resolve({
-                    success: false,
-                    error: chrome.runtime.lastError.message,
-                    requestId: message.requestId,
-                  });
-                } else {
-                  resolve(response || { success: true, requestId: message.requestId });
-                }
-              });
-            });
+          // If no tabId is provided, use the active tab
+          if(!tabId){
+            const tabs = await chrome.tabs.query({ active: true, currentWindow: true });
+            tabId = tabs[0]?.id;
           }
-        } else {
-          // Send to background or other contexts
-          return new Promise((resolve) => {
-            chrome.runtime.sendMessage(message, (response) => {
+          return new Promise((resolve, reject) => {
+            chrome.tabs.sendMessage(tabId, message, (response) => {
               if (chrome.runtime.lastError) {
-                resolve({
+                reject({
                   success: false,
                   error: chrome.runtime.lastError.message,
-                  requestId: message.requestId,
                 });
               } else {
-                resolve(response || { success: true, requestId: message.requestId });
+                resolve(response);
+              }
+            });
+          });
+        } else {
+          // Send to background or other contexts
+          return new Promise((resolve, reject) => {
+            chrome.runtime.sendMessage(message, (response) => {
+              if (chrome.runtime.lastError) {
+                reject({
+                  success: false,
+                  error: chrome.runtime.lastError.message,
+                });
+              } else {
+                resolve(response);
               }
             });
           });
@@ -77,7 +72,6 @@ export class TypedMessenger {
       return {
         success: false,
         error: error instanceof Error ? error.message : 'Unknown error',
-        requestId: message.requestId,
       };
     }
   }
@@ -85,12 +79,15 @@ export class TypedMessenger {
   /**
    * Listen for typed messages
    */
-  static onMessage<TPayload = any>(
-    type: MessageType,
-    handler: (payload: TPayload, sender: chrome.runtime.MessageSender) => Promise<MessageResponse> | MessageResponse | void
+  static onMessage<T extends MessageType>(
+    type: T,
+    handler: (
+      payload: MessageSchema[T]['payload'],
+      sender: chrome.runtime.MessageSender
+    ) => MessageResponse<MessageSchema[T]['response']> | Promise<MessageResponse<MessageSchema[T]['response']>>
   ): void {
     if (typeof chrome !== 'undefined' && chrome.runtime) {
-      chrome.runtime.onMessage.addListener((message: BaseMessage<TPayload>, sender, sendResponse) => {
+      chrome.runtime.onMessage.addListener((message: BaseMessage<any>, sender, sendResponse) => {
         if (message.type === type) {
           const result = handler(message.payload, sender);
           
@@ -108,9 +105,9 @@ export class TypedMessenger {
   /**
    * Broadcast a message to all contexts
    */
-  static async broadcast<TPayload = any>(
-    type: MessageType,
-    payload: TPayload,
+  static async broadcast<T extends MessageType>(
+    type: T,
+    payload: MessageSchema[T]['payload'],
     source: MessageSource
   ): Promise<void> {
     // Send to all tabs' content scripts
@@ -122,8 +119,7 @@ export class TypedMessenger {
             type,
             payload,
             source,
-            target: 'content',
-            timestamp: new Date().toISOString(),
+            target: 'content'
           });
         }
       });
@@ -136,73 +132,97 @@ export class TypedMessenger {
   }
 }
 
-// Convenience functions for specific message types
-export const SearchMessenger = {
-  async performSearch(searchString: string, searchType: 'smart' | 'basic' = 'smart') {
-    return TypedMessenger.send<SearchPayload>('PERFORM_SEARCH', {
-      searchString,
-      searchType,
-    }, 'sidebar');
-  },
-  
-  async clearChat() {
-    return TypedMessenger.send('CLEAR_CHAT', {}, 'sidebar');
-  },
-  
-  async navigate(direction: 'next' | 'prev') {
-    return TypedMessenger.send<NavigationPayload>('NAVIGATE', {
-      direction,
-    }, 'sidebar');
-  },
-};
+// ────────────────────────────────────────────────────────────
+//  Context-specific messenger helpers
+//  1. ApplicationMessenger   (runs in React sidebar – source: 'sidebar')
+//  2. BackgroundMessenger    (runs in background        – source: 'background')
+//  3. ContentMessenger       (runs in content script    – source: 'content')
+// ────────────────────────────────────────────────────────────
 
-export const ContentMessenger = {
-  async highlightElement(element: any, isLink: boolean = false) {
-    return TypedMessenger.send<HighlightPayload>('HIGHLIGHT_ELEMENT', {
-      element,
-      isLink,
-    }, 'background', 'content');
+export const ApplicationMessenger = {
+  // Control messages to background
+  async performSearch(searchString: string, searchType: 'smart' | 'basic' = 'smart', tabId: number) {
+    console.log('Sending PERFORM_SEARCH to background:', searchString, searchType, tabId);
+    return TypedMessenger.send('PERFORM_SEARCH', { searchString, searchType, tabId }, 'sidebar');
   },
-  
-  async removeHighlights() {
-    return TypedMessenger.send('REMOVE_HIGHLIGHTS', {}, 'background', 'content');
-  },
-  
-  async getPageHTML() {
-    return TypedMessenger.send('GET_PAGE_HTML', {}, 'background', 'content');
-  },
-  
-  async sendHTML(html: string, url: string) {
-    return TypedMessenger.send<SendHtmlPayload>('SEND_HTML', {
-      html,
-      url,
-    }, 'content');
-  },
-  
-  async getTabId() {
-    return TypedMessenger.send('GET_TAB_ID', {}, 'content');
-  },
-  
-  async cleanupSession(sessionId: string) {
-    return TypedMessenger.send<CleanupSessionPayload>('CLEANUP_SESSION', {
-      sessionId,
-    }, 'content');
-  },
-  
-  async navigateToLink(elementId: string, href: string) {
-    return TypedMessenger.send<NavigateToLinkPayload>('NAVIGATE_TO_LINK', {
-      elementId,
-      href,
-    }, 'background', 'content');
-  },
-};
 
-export const BackgroundMessenger = {
-  async getInitialState() {
+  async requestInitialState() {
+    console.log('Sending UI_REQUEST_INITIAL_STATE to background');
     return TypedMessenger.send('UI_REQUEST_INITIAL_STATE', {}, 'sidebar');
   },
-  
-  async toggleActivation() {
-    return TypedMessenger.send('TOGGLE_ACTIVATION', {}, 'sidebar');
+
+  // UI control functions
+  async clearChat() {
+    console.log('Sending REMOVE_HIGHLIGHTS to content');
+    return TypedMessenger.send('REMOVE_HIGHLIGHTS', {}, 'sidebar', 'content');
   },
+
+  async highlightElement(element: any, isLink: boolean = false) {
+    console.log('Sending HIGHLIGHT_ELEMENT to content:', element, isLink);
+    return TypedMessenger.send('HIGHLIGHT_ELEMENT', { element, isLink }, 'sidebar', 'content');
+  },
+
+  async removeHighlights() {
+    console.log('Sending REMOVE_HIGHLIGHTS to content');
+    return TypedMessenger.send('REMOVE_HIGHLIGHTS', {}, 'sidebar', 'content');
+  },
+
+  // Syncer push (sidebar ➞ background)
+  async sendTabStateUpdate(tabId: number, tabState: TabState) {
+    console.log('Sending SIDEBAR_TAB_STATE_UPDATE to background:', tabId, tabState);
+    return TypedMessenger.send('SIDEBAR_TAB_STATE_UPDATE', { tabId, tabState }, 'sidebar');
+  },
+
+  async setActiveState(tabId: number, isActive: boolean, domain: string) {
+    console.log('Sending TOGGLE_ACTIVE_STATE to background:', tabId, isActive, domain);
+    return TypedMessenger.send('TOGGLE_ACTIVE_STATE', {tabId, isActive, domain}, 'sidebar', 'background');
+  }
+};
+
+// Background ➞ other contexts helpers (runs in background)
+export const BackgroundMessenger = {
+  // Background ➞ content helpers
+  async highlightElement(tabId: number, element: any, isLink: boolean = false) {
+    console.log('Sending HIGHLIGHT_ELEMENT to content:', tabId, element, isLink);
+    return TypedMessenger.send('HIGHLIGHT_ELEMENT', { element, isLink }, 'background', 'content', tabId);
+  },
+
+  async removeHighlights(tabId: number) {
+    console.log('Sending REMOVE_HIGHLIGHTS to content:', tabId);
+    return TypedMessenger.send('REMOVE_HIGHLIGHTS', { tabId }, 'background', 'content', tabId);
+  },
+
+  async getPageHTML(tabId: number) {
+    console.log('Sending GET_PAGE_HTML to content:', tabId);
+    return TypedMessenger.send('GET_PAGE_HTML', {}, 'background', 'content', tabId);
+  },
+
+  async navigateToLink(tabId: number, elementId: string, href: string) {
+    console.log('Sending NAVIGATE_TO_LINK to content:', tabId, elementId, href);
+    return TypedMessenger.send('NAVIGATE_TO_LINK', { elementId, href }, 'background', 'content', tabId);
+  },
+
+  // Syncer push (background ➞ sidebar)
+  async sendTabStateUpdate(tabId: number, tabState: TabState | null) {
+    console.log('Sending BACKGROUND_STATE_UPDATE to sidebar:', tabId, tabState);
+    return TypedMessenger.send('BACKGROUND_STATE_UPDATE', { tabId, tabState }, 'background', 'sidebar');
+  }
+};
+
+// Content ➞ background helpers (runs in content script)
+export const ContentMessenger = {
+  async sendHTML(html: string, url: string) {
+    console.log('Sending SEND_HTML to background:', url);
+    return TypedMessenger.send('SEND_HTML', { html, url }, 'content');
+  },
+
+  async getTabId() {
+    console.log('Sending GET_TAB_ID to background');
+    return TypedMessenger.send('GET_TAB_ID', {}, 'content');
+  },
+
+  async cleanupSession(sessionId: string) {
+    console.log('Sending CLEANUP_SESSION to background:', sessionId);
+    return TypedMessenger.send('CLEANUP_SESSION', { sessionId }, 'content');
+  }
 }; 

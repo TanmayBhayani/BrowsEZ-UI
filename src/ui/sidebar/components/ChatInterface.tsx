@@ -1,6 +1,6 @@
 import React, { useEffect, useCallback } from 'react';
-import { useTabStore, selectDisplayConversation, selectIsTabLoading } from '@shared/state/tabStore';
-import { SearchMessenger, BackgroundMessenger } from '@shared/utils/messaging';
+import { useTabStore, selectDisplayConversation, selectIsTabLoading, initialSearchState } from '@shared/state/tabStore';
+import { ApplicationMessenger } from '@shared/utils/messaging';
 import { ChatView } from './ChatView';
 import { InputArea } from './InputArea';
 
@@ -10,18 +10,9 @@ export const ChatInterface: React.FC = () => {
 
   // Toggle extension activation
   const handleToggleActivation = useCallback(async () => {
-    try {
-      console.log("Requesting toggle activation from background script");
-      
-      const response = await BackgroundMessenger.toggleActivation();
-      
-      if (!response.success) {
-        console.error("Failed to toggle activation:", response.error);
-      }
-    } catch (error) {
-      console.error("Error toggling activation:", error);
-    }
-  }, []);
+    tabState.toggleActiveState();
+    // ApplicationMessenger.setActiveState(tabState.tabId, isActive);
+  }, [tabState.tabId]);
 
   // Send search message
   const handleSendMessage = useCallback(async (content: string, searchType: 'smart' | 'basic') => {
@@ -35,34 +26,26 @@ export const ChatInterface: React.FC = () => {
         timestamp: new Date().toISOString(),
       };
       
-      const systemMessage = {
-        role: 'system' as const,
-        content: 'Searching...',
-        timestamp: new Date().toISOString(),
-      };
-      
       if (tabState.searchState) {
         // Filter out previous navigation and temporary messages
         const filteredConversation = (tabState.searchState.conversation || []).filter(
           (msg: any) => msg.role !== 'navigation' && 
-          !(msg.role === 'system' && (msg.content === 'No relevant results found.' || msg.content === 'Searching...'))
+          !(msg.role === 'system' && msg.content === 'No relevant results found.')
         );
 
         const updatedConversation = [
           ...filteredConversation,
-          userMessage,
-          systemMessage
+          userMessage
         ];
         
         tabState.updateSearchState({
-          conversation: updatedConversation,
-          searchStatus: 'searching'
+          conversation: updatedConversation
         });
       }
       
       console.log("Sending search request:", { content, searchType });
       
-      const response = await SearchMessenger.performSearch(content, searchType);
+      const response = await ApplicationMessenger.performSearch(content, searchType, tabState.tabId);
       
       if (!response.success) {
         console.error("Search failed:", response.error);
@@ -110,11 +93,10 @@ export const ChatInterface: React.FC = () => {
   // Clear chat
   const handleClearChat = useCallback(async () => {
     try {
-      const response = await SearchMessenger.clearChat();
-      
-      if (!response.success) {
-        console.error("Failed to clear chat:", response.error);
-      }
+      // Clear chat locally; syncer will propagate
+      tabState.updateSearchState(initialSearchState);
+      // remove any highlights on page
+      await ApplicationMessenger.removeHighlights();
     } catch (error) {
       console.error("Error clearing chat:", error);
     }
@@ -123,17 +105,29 @@ export const ChatInterface: React.FC = () => {
   // Navigation handler
   const handleNavigation = useCallback(async (direction: 'next' | 'prev') => {
     try {
-      console.log(`Requesting navigation: ${direction}`);
-      
-      const response = await SearchMessenger.navigate(direction);
-      
-      if (!response.success) {
-        console.error("Navigation failed:", response.error);
+      // Compute next/prev position locally
+      const { searchState } = tabState;
+      if (!searchState || searchState.totalResults === 0) return;
+      let newPos = searchState.currentPosition;
+      if (direction === 'next' && newPos < searchState.totalResults) newPos += 1;
+      if (direction === 'prev' && newPos > 1) newPos -= 1;
+
+      // Update position only if it has changed; but still highlight the element even if unchanged.
+      const positionChanged = newPos !== searchState.currentPosition;
+      if (positionChanged) {
+        tabState.updateSearchPosition(newPos);
+      }
+
+      // Always attempt to highlight the element corresponding to the current/updated position.
+      const element = searchState.searchResults[newPos - 1];
+      if (element) {
+        const isLink = element.tag === 'a' || !!(element.attributes?.href) || (element.attributes && 'href' in element.attributes);
+        await ApplicationMessenger.highlightElement(element, isLink);
       }
     } catch (error) {
       console.error("Error during navigation:", error);
     }
-  }, []);
+  }, [tabState]);
 
   // Check if extension is still initializing
   const isInitializing = tabState.tabId < 0;
@@ -202,6 +196,11 @@ export const ChatInterface: React.FC = () => {
       <ChatView 
         onNavigate={handleNavigation}
       />
+      
+      {/* Generating indicator displayed only while searching */}
+      {tabState.searchState?.searchStatus === 'searching' && (
+        <div className="generating-indicator">Generating...</div>
+      )}
       
       <div className="input-container">
         <InputArea 

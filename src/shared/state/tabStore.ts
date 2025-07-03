@@ -6,6 +6,7 @@ import type { TabState, SearchState, SearchResult, ConversationMessage } from '@
 export interface TabActions {
   setTabState: (tabState: TabState) => void;
   updateSearchState: (searchStateUpdates: Partial<SearchState>) => void;
+  toggleActiveState: () => void;
   updateHTMLProcessingStatus: (status: 'not_sent' | 'processing' | 'ready' | 'error') => void;
   updateBasicInfo: (updates: { url?: string; title?: string; isActive?: boolean; lastProcessedHTML?: string | null }) => void;
   updateSearchPosition: (position: number) => void;
@@ -18,23 +19,26 @@ export interface TabActions {
   // Potentially more actions specific to a single tab's lifecycle in the UI
 }
 
-const initialTabState: TabState = {
+export const initialSearchState: SearchState = {
+  lastSearch: null,
+  currentPosition: 0,
+  totalResults: 0,
+  searchStatus: 'idle',
+  searchResults: [],
+  llmAnswer: '',
+  navigationLinks: [],
+  conversation: [],
+};
+
+export const initialTabState: TabState = {
   tabId: -1, // Default or placeholder, should be updated on initialization
   url: '',
   title: '',
   isActive: false,
+  isContentScriptActive: false,
   htmlProcessingStatus: 'not_sent',
   lastProcessedHTML: null,
-  searchState: {
-    lastSearch: null,
-    currentPosition: 0,
-    totalResults: 0,
-    searchStatus: 'idle',
-    searchResults: [],
-    llmAnswer: '',
-    navigationLinks: [],
-    conversation: [],
-  },
+  searchState: initialSearchState,
 };
 
 export const useTabStore = create<TabState & TabActions>()(
@@ -56,6 +60,10 @@ export const useTabStore = create<TabState & TabActions>()(
       updateBasicInfo: (updates) => set((state) => ({
         ...state,
         ...updates,
+      })),
+
+      toggleActiveState: () => set((state) => ({
+        isActive: !state.isActive,
       })),
 
       updateSearchPosition: (position) => set((state) => ({
@@ -117,6 +125,7 @@ export const useTabStore = create<TabState & TabActions>()(
     })),
     {
       name: 'tab-store',
+      // enabled: true,
     }
   )
 );
@@ -132,7 +141,7 @@ export const selectDisplayConversation = (state: TabState): ConversationMessage[
   
   conversation = conversation.filter(
     (msg) => msg.role !== 'navigation' && 
-    !(msg.role === 'system' && msg.content === 'No relevant results found.')
+    !(msg.role === 'system' && (msg.content === 'No relevant results found.' || msg.content === 'Searching...'))
   );
 
   if (currentSearchState.searchStatus === 'showing_results' && currentSearchState.llmAnswer) {

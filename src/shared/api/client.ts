@@ -9,9 +9,8 @@ export interface SessionResponse {
 }
 
 export interface HTMLProcessingResponse {
-  status: string;
+  status: number;
   message: string;
-  processed?: boolean;
 }
 
 export interface SearchResponse {
@@ -94,8 +93,11 @@ class APIClient {
       }
 
       const data = await response.json();
-      console.log('HTML sent to server:', data);
-      return data;
+      if (!data.message) {
+        throw new Error('Invalid response format');
+      }
+      data.status = response.status;
+      return data as HTMLProcessingResponse;
     } catch (error) {
       console.error('Error sending HTML to server:', error);
       throw error;

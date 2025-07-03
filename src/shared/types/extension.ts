@@ -38,8 +38,9 @@ export interface ConversationMessage {
 
 export interface TabState {
   tabId: number;
-  url?: string;
+  url: string;
   title?: string;
+  isContentScriptActive: boolean;
   isActive: boolean;
   htmlProcessingStatus: 'not_sent' | 'processing' | 'ready' | 'error';
   lastProcessedHTML: string | null;
@@ -50,7 +51,7 @@ export interface TabState {
 export interface ExtensionState {
   // Current active tab ID
   currentTabId: number | null;
-  
+  isInitialized: boolean;
   // Tab states keyed by tab ID
   tabStates: Record<number, TabState>;
   
@@ -60,8 +61,4 @@ export interface ExtensionState {
   
   // UI state
   sidebarOpen: boolean;
-  settingsOpen: boolean;
-  
-  // Session data
-  sessionId: string | null;
 } 

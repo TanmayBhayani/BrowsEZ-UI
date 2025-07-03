@@ -199,30 +199,30 @@ function navigateToLink(elementId: string, href: string): void {
   }
 }
 
-async function processPage(): Promise<void> {
-  try {
-    const response = await ContentMessenger.getTabId();
+// async function processPage(): Promise<void> {
+  // try {
+  //   const response = await ContentMessenger.getTabId();
     
-    if (!response || !response.success) {
-      console.error("No valid response received for tab ID request");
-      return;
-    }
+  //   if (!response || !response.success) {
+  //     console.error("No valid response received for tab ID request");
+  //     return;
+  //   }
     
-    const tabId = response.data;
-    if (!tabId) {
-      console.error("Received undefined tab ID");
-      return;
-    }
-    addDataAttributesToElements(document.body);
+  //   const tabId = response.data;
+  //   if (!tabId) {
+  //     console.error("Received undefined tab ID");
+  //     return;
+  //   }
+  //   addDataAttributesToElements(document.body);
     
-    const html = document.documentElement.outerHTML;
-    await ContentMessenger.sendHTML(html, window.location.href);
+  //   const html = document.documentElement.outerHTML;
+  //   await ContentMessenger.sendHTML(html, window.location.href);
     
-    console.log("HTML sent for tab:", tabId, " to background script");
-  } catch (error) {
-    console.error("Error getting tab ID:", error);
-  }
-}
+  //   console.log("HTML sent for tab:", tabId, " to background script");
+  // } catch (error) {
+  //   console.error("Error getting tab ID:", error);
+  // }
+// }
 
 async function cleanupSessionOnUnload(): Promise<void> {
   const sessionId = sessionStorage.getItem('currentSessionId');
@@ -253,15 +253,9 @@ TypedMessenger.onMessage('REMOVE_HIGHLIGHTS', async (payload, sender) => {
 TypedMessenger.onMessage('GET_PAGE_HTML', async (payload, sender) => {
   addDataAttributesToElements(document.body);
   const html = document.documentElement.outerHTML;
-  return { success: true, data: html };
+  return { success: true, data: { html } };
 });
 
-TypedMessenger.onMessage('SEND_HTML', async (payload, sender) => {
-  addDataAttributesToElements(document.body);
-  const html = document.documentElement.outerHTML;
-  await ContentMessenger.sendHTML(html, window.location.href);
-  return { success: true };
-});
 
 TypedMessenger.onMessage('NAVIGATE_TO_LINK', async (payload, sender) => {
   navigateToLink(payload.elementId, payload.href);
@@ -270,13 +264,13 @@ TypedMessenger.onMessage('NAVIGATE_TO_LINK', async (payload, sender) => {
 
 // Initialize when page loads
 if (document.readyState === 'loading') {
-  document.addEventListener('DOMContentLoaded', processPage);
+  // document.addEventListener('DOMContentLoaded', processPage);
 } else {
-  processPage();
+  // processPage();
 }
 
 // Add cleanup event listeners
 window.addEventListener('beforeunload', cleanupSessionOnUnload);
-window.addEventListener('unload', cleanupSessionOnUnload);
+// window.addEventListener('unload', cleanupSessionOnUnload);
 
 console.log('BrowsEZ: Modern content script fully initialized'); 

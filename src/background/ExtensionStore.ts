@@ -1,16 +1,39 @@
 import type { ExtensionState, TabState, SearchState } from '@shared/types/extension';
+import { initialTabState } from '@shared/state/tabStore';
+// Define types for store change events
+export type StoreChangeEventType = 
+  | 'TAB_STATE_INITIALIZED'
+  | 'TAB_STATE_UPDATED'
+  | 'TAB_STATE_CLEARED'
+  | 'CURRENT_TAB_CHANGED'
+  | 'EXTENSION_ACTIVE_CHANGED'
+  | 'SIDEBAR_STATE_CHANGED'
+  | 'ACTIVE_DOMAINS_CHANGED'
+  | 'SESSION_ID_CHANGED';
+
+export interface StoreChangeEvent {
+  type: StoreChangeEventType;
+  tabId?: number;
+  data?: any;
+}
+
+export const initialExtensionState: ExtensionState = {
+  currentTabId: null,
+  isInitialized: false,
+  tabStates: {},
+  isExtensionActive: false,
+  activeDomains: [],
+  sidebarOpen: false,
+}
+
+export type StoreChangeListener = (event: StoreChangeEvent) => void;
 
 export class ExtensionStore {
   private static instance: ExtensionStore;
-  private state: ExtensionState = {
-    currentTabId: null,
-    tabStates: {},
-    isExtensionActive: false,
-    activeDomains: [],
-    sidebarOpen: false,
-    settingsOpen: false,
-    sessionId: null,
-  };
+  private state: ExtensionState = initialExtensionState;
+  
+  // Observer pattern implementation
+  private listeners = new Set<StoreChangeListener>();
 
   static getInstance(): ExtensionStore {
     if (!ExtensionStore.instance) {
@@ -25,7 +48,7 @@ export class ExtensionStore {
 
   private async loadFromStorage(): Promise<void> {
     try {
-      const result = await chrome.storage.local.get(['extensionState']);
+      const result = await chrome.storage.session.get(['extensionState']);
       if (result.extensionState) {
         this.state = { ...this.state, ...result.extensionState };
       }
@@ -36,7 +59,7 @@ export class ExtensionStore {
 
   private async saveToStorage(): Promise<void> {
     try {
-      await chrome.storage.local.set({ extensionState: this.state });
+      await chrome.storage.session.set({ extensionState: this.state });
     } catch (error) {
       console.error('Error saving state to storage:', error);
     }
@@ -44,52 +67,48 @@ export class ExtensionStore {
 
   // Tab state helpers
   private createDefaultTabState(tabId: number, url?: string, title?: string): TabState {
-    return {
-      tabId,
-      url,
-      title,
-      isActive: false,
-      htmlProcessingStatus: 'not_sent',
-      lastProcessedHTML: null,
-      searchState: {
-        lastSearch: null,
-        currentPosition: 0,
-        totalResults: 0,
-        searchStatus: 'idle',
-        searchResults: [],
-        llmAnswer: '',
-        navigationLinks: [],
-        conversation: [],
-      },
-    };
+    const defaultTabState = initialTabState;
+    defaultTabState.tabId = tabId;
+    defaultTabState.url = url ?? '';
+    defaultTabState.title = title ?? '';
+    return defaultTabState;
   }
 
   // Public API methods
-  initializeTabState(tabId: number): void {
+  initializeTabState(tabId: number, notify: boolean = true): void {
     if (!this.state.tabStates[tabId]) {
       this.state.tabStates[tabId] = this.createDefaultTabState(tabId);
       this.saveToStorage();
+      if(notify){
+        this.notify({ type: 'TAB_STATE_INITIALIZED', tabId });
+      }
     }
   }
 
   updateTabState = {
-    updateBasicInfo: (tabId: number, updates: Partial<Pick<TabState, 'url' | 'title' | 'isActive' | 'lastProcessedHTML'>>) => {
+    updateBasicInfo: (tabId: number, updates: Partial<Pick<TabState, 'url' | 'title' | 'isActive' | 'lastProcessedHTML' | 'isContentScriptActive'>>, notify: boolean = true) => {
       if (!this.state.tabStates[tabId]) {
         this.initializeTabState(tabId);
       }
       this.state.tabStates[tabId] = { ...this.state.tabStates[tabId], ...updates };
       this.saveToStorage();
+      if(notify){
+        this.notify({ type: 'TAB_STATE_UPDATED', tabId, data: { updates } });
+      }
     },
 
-    updateHTMLProcessingStatus: (tabId: number, status: TabState['htmlProcessingStatus']) => {
+    updateHTMLProcessingStatus: (tabId: number, status: TabState['htmlProcessingStatus'], notify: boolean = true) => {
       if (!this.state.tabStates[tabId]) {
         this.initializeTabState(tabId);
       }
       this.state.tabStates[tabId].htmlProcessingStatus = status;
       this.saveToStorage();
+      if(notify){
+        this.notify({ type: 'TAB_STATE_UPDATED', tabId, data: { htmlProcessingStatus: status } });
+      }
     },
 
-    updateSearchState: (tabId: number, searchStateUpdates: Partial<SearchState>) => {
+    updateSearchState: (tabId: number, searchStateUpdates: Partial<SearchState>, notify: boolean = true) => {
       if (!this.state.tabStates[tabId]) {
         this.initializeTabState(tabId);
       }
@@ -98,6 +117,9 @@ export class ExtensionStore {
         ...searchStateUpdates,
       };
       this.saveToStorage();
+      if(notify){
+        this.notify({ type: 'TAB_STATE_UPDATED', tabId, data: { searchStateUpdates } });
+      }
     },
   };
 
@@ -130,55 +152,52 @@ export class ExtensionStore {
     return this.state.sidebarOpen;
   }
 
-  get settingsOpen(): boolean {
-    return this.state.settingsOpen;
-  }
-
-  get sessionId(): string | null {
-    return this.state.sessionId;
-  }
-
   // Setters
-  setCurrentTabId(tabId: number | null): void {
+  setCurrentTabId(tabId: number | null, notify: boolean = true): void {
     this.state.currentTabId = tabId;
     this.saveToStorage();
-  }
-
-  setExtensionActive(active: boolean): void {
-    this.state.isExtensionActive = active;
-    this.saveToStorage();
-  }
-
-  setSidebarOpen(open: boolean): void {
-    this.state.sidebarOpen = open;
-    this.saveToStorage();
-  }
-
-  setSettingsOpen(open: boolean): void {
-    this.state.settingsOpen = open;
-    this.saveToStorage();
-  }
-
-  addActiveDomain(domain: string): void {
-    if (!this.state.activeDomains.includes(domain)) {
-      this.state.activeDomains.push(domain);
-      this.saveToStorage();
+    if(notify){
+      this.notify({ type: 'CURRENT_TAB_CHANGED', tabId: tabId ?? undefined });
     }
   }
 
-  removeActiveDomain(domain: string): void {
+  setExtensionActive(active: boolean, notify: boolean = true): void {
+    this.state.isExtensionActive = active;
+    this.saveToStorage();
+    if(notify){
+      this.notify({ type: 'EXTENSION_ACTIVE_CHANGED', data: { active } });
+    }
+  }
+
+  setSidebarOpen(open: boolean, notify: boolean = true): void {
+    this.state.sidebarOpen = open;
+    this.saveToStorage();
+    if(notify){
+      this.notify({ type: 'SIDEBAR_STATE_CHANGED', data: { open } });
+    }
+  }
+
+
+  addActiveDomain(url: string): void {
+    const domain = new URL(url).hostname;
+    if (!this.state.activeDomains.includes(domain)) {
+      this.state.activeDomains.push(domain);
+      this.saveToStorage(); 
+    }
+  }
+
+  removeActiveDomain(url: string): void {
+    const domain = new URL(url).hostname;
     this.state.activeDomains = this.state.activeDomains.filter((d: string) => d !== domain);
     this.saveToStorage();
   }
 
-  setSessionId(sessionId: string | null): void {
-    this.state.sessionId = sessionId;
-    this.saveToStorage();
-  }
-
-  clearTabState(tabId: number): void {
+  clearTabState(tabId: number, notify: boolean = true): void {
     delete this.state.tabStates[tabId];
     this.saveToStorage();
+    if(notify){
+      this.notify({ type: 'TAB_STATE_CLEARED', tabId });
+    }
   }
 
   // Get the full state (useful for debugging or advanced operations)
@@ -188,15 +207,35 @@ export class ExtensionStore {
 
   // Reset the entire store (useful for testing or complete reset)
   resetStore(): void {
-    this.state = {
-      currentTabId: null,
-      tabStates: {},
-      isExtensionActive: false,
-      activeDomains: [],
-      sidebarOpen: false,
-      settingsOpen: false,
-      sessionId: null,
-    };
+    this.state = initialExtensionState;
     this.saveToStorage();
+  }
+
+  setTabState(tabId: number, tabState: TabState, notify: boolean = true): void {
+    this.state.tabStates[tabId] = tabState;
+    this.saveToStorage();
+    if(notify){
+      this.notify({ type: 'TAB_STATE_UPDATED', tabId, data: { tabState } });
+    }
+  }
+
+  // Subscribe to store changes
+  subscribe(listener: StoreChangeListener): () => void {
+    this.listeners.add(listener);
+    // Return unsubscribe function
+    return () => {
+      this.listeners.delete(listener);
+    };
+  }
+
+  // Notify all listeners of a change
+  private notify(event: StoreChangeEvent): void {
+    this.listeners.forEach(listener => {
+      try {
+        listener(event);
+      } catch (error) {
+        console.error('Error in store change listener:', error);
+      }
+    });
   }
 } 
