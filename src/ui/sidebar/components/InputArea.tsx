@@ -11,15 +11,15 @@ export const InputArea: React.FC<InputAreaProps> = ({
   onClearChat 
 }) => {
   const [input, setInput] = useState('');
-  const [searchType, setSearchType] = useState<'smart' | 'basic'>('smart');
-  
+  // Always use smart search by default; UI selector removed for simplicity
+
   const tabState = useTabStore();
   const disabled = selectIsTabLoading(tabState);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (input.trim() && !disabled) {
-      onSendMessage(input.trim(), searchType);
+      onSendMessage(input.trim(), 'smart');
       setInput('');
     }
   };
@@ -27,27 +27,6 @@ export const InputArea: React.FC<InputAreaProps> = ({
   return (
     <div className="input-area">
       <form onSubmit={handleSubmit}>
-        <div className="search-type-selector">
-          <label>
-            <input
-              type="radio"
-              value="smart"
-              checked={searchType === 'smart'}
-              onChange={(e) => setSearchType(e.target.value as 'smart' | 'basic')}
-            />
-            Smart Search
-          </label>
-          <label>
-            <input
-              type="radio"
-              value="basic"
-              checked={searchType === 'basic'}
-              onChange={(e) => setSearchType(e.target.value as 'smart' | 'basic')}
-            />
-            Basic Search
-          </label>
-        </div>
-        
         <div className="input-controls">
           <input
             type="text"

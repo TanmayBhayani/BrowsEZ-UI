@@ -199,7 +199,7 @@ export const ChatInterface: React.FC = () => {
       
       {/* Generating indicator displayed only while searching */}
       {tabState.searchState?.searchStatus === 'searching' && (
-        <div className="generating-indicator">Generating...</div>
+        <div className="generating-indicator">Generating</div>
       )}
       
       <div className="input-container">
