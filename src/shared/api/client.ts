@@ -1,6 +1,9 @@
 // API Client - Centralized API communication layer
 
+import { ConversationMessage } from '../types/extension';
 const API_BASE_URL = 'https://find-production.up.railway.app';
+
+// const API_BASE_URL = 'http://localhost:5000';
 
 export interface SessionResponse {
   sessionId?: string;
@@ -36,7 +39,7 @@ class APIClient {
    */
   async initializeSession(retryCount = 0): Promise<SessionResponse> {
     try {
-      const response = await fetch(`${this.baseUrl}/initialize_session`, {
+      const response = await fetch(`${this.baseUrl}/auth/initialize_session`, {
         method: 'POST',
         credentials: 'include',
         headers: {
@@ -105,22 +108,28 @@ class APIClient {
   }
 
   /**
-   * Search on the server
+   * Search on the server with full conversation context
    */
-  async search(searchString: string, tabId: number, useLlmFiltering = true): Promise<SearchResponse> {
-    const searchParams = new URLSearchParams({
-      searchString: searchString,
-      useLlmFiltering: useLlmFiltering.toString()
-    });
+  async search(searchString: string, tabId: number, useLlmFiltering = true, conversation?: ConversationMessage[]): Promise<SearchResponse> {
+    // Build the conversation payload
+    const payload = {
+      conversation: conversation || [
+        {
+          role: 'user',
+          content: searchString
+        }
+      ],
+      tabId: `${tabId}`
+    };
 
     try {
-      const response = await fetch(`${this.baseUrl}/search?${searchParams.toString()}`, {
-        method: 'GET',
+      const response = await fetch(`${this.baseUrl}/search`, {
+        method: 'POST',
         credentials: 'include',
         headers: {
           'Content-Type': 'application/json',
-          'tabId': tabId.toString()
-        }
+        },
+        body: JSON.stringify(payload)
       });
 
       if (response.status === 401 || response.status === 404) {

@@ -318,7 +318,17 @@ TypedMessenger.onMessage('PERFORM_SEARCH', async (payload) => {
     const useLlmFiltering = payload.searchType === 'smart';
 
     try {
-      const serverData = await apiClient.search(payload.searchString, tabId, useLlmFiltering);
+      // Get the current conversation with the new user message
+      // Filter to only include user and assistant messages
+      const currentConversation = (currentTabState.searchState.conversation || [])
+        .filter(msg => msg.role === 'user' || msg.role === 'assistant');
+      
+      const serverData = await apiClient.search(
+        payload.searchString, 
+        tabId, 
+        useLlmFiltering,
+        currentConversation
+      );
 
       const searchResults = serverData.searchResults?.metadatas?.[0] ?? [];
       const totalResults = searchResults.length;
@@ -350,7 +360,18 @@ TypedMessenger.onMessage('PERFORM_SEARCH', async (payload) => {
           const htmlResponse = await BackgroundMessenger.getPageHTML(tabId);
           if (htmlResponse.success && htmlResponse.data) {
             await apiClient.sendHTML(htmlResponse.data.html, tabId);
-            const retryData = await apiClient.search(payload.searchString, tabId, useLlmFiltering);
+            
+            // Get the current conversation for retry
+            // Filter to only include user and assistant messages
+            const retryConversation = (store.tabStates[tabId].searchState.conversation || [])
+              .filter(msg => msg.role === 'user' || msg.role === 'assistant');
+            
+            const retryData = await apiClient.search(
+              payload.searchString, 
+              tabId, 
+              useLlmFiltering,
+              retryConversation
+            );
 
             const retryResults = retryData.searchResults?.metadatas?.[0] ?? [];
             const retryTotal = retryResults.length;
