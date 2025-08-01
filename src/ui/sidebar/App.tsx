@@ -12,6 +12,21 @@ const App: React.FC = () => {
   const tabStore = useTabStore();
   const { tabId: currentTabIdFromTabStore, htmlProcessingStatus } = tabStore;
 
+  // Establish connection with background script for disconnect detection
+  useEffect(() => {
+    console.log("BrowsEZ Sidebar App: Establishing connection with background script.");
+    const port = chrome.runtime.connect({ name: 'sidebar' });
+    
+    port.onDisconnect.addListener(() => {
+      console.log("BrowsEZ Sidebar App: Connection to background script lost.");
+    });
+
+    return () => {
+      console.log("BrowsEZ Sidebar App: Disconnecting from background script.");
+      port.disconnect();
+    };
+  }, []);
+
   // initTabStoreSync now handles the initial state request.
   // We just need to call it on mount and cleanup on unmount.
   useEffect(() => {

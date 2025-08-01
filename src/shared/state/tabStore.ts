@@ -156,7 +156,7 @@ export const selectDisplayConversation = (state: TabState): ConversationMessage[
   if (currentSearchState.searchStatus === 'showing_results' && currentSearchState.totalResults > 0) {
     conversation.push({
       role: 'navigation',
-      content: `Navigating results: ${currentSearchState.currentPosition > 0 ? currentSearchState.currentPosition : 1} of ${currentSearchState.totalResults}`,
+      content: `Relevant Results: ${currentSearchState.currentPosition > 0 ? currentSearchState.currentPosition : 1} of ${currentSearchState.totalResults}`,
       timestamp: new Date().toISOString(),
     });
   } else if (currentSearchState.searchStatus === 'showing_results' && currentSearchState.totalResults === 0 && !currentSearchState.llmAnswer) {

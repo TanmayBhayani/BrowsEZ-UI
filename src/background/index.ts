@@ -191,6 +191,34 @@ async function getActiveTab(): Promise<chrome.tabs.Tab | null> {
 // Event Listeners
 chrome.runtime.onInstalled.addListener(startUp);
 
+// Listen for sidebar disconnect (when sidebar closes)
+chrome.runtime.onConnect.addListener((port) => {
+  console.log('BrowsEZ: Connection established:', port.name);
+  
+  if (port.name === 'sidebar') {
+    port.onDisconnect.addListener(async () => {
+      console.log('BrowsEZ: Sidebar disconnected, removing highlights from all tabs');
+      
+      try {
+        // Get all tabs and remove highlights from each
+        const tabs = await chrome.tabs.query({});
+        for (const tab of tabs) {
+          if (tab.id && tab.url && (tab.url.startsWith('http://') || tab.url.startsWith('https://'))) {
+            try {
+              await BackgroundMessenger.removeHighlights(tab.id);
+            } catch (error) {
+              // Silently handle errors for tabs that might not have content scripts
+              console.log(`Could not remove highlights from tab ${tab.id}:`, error);
+            }
+          }
+        }
+      } catch (error) {
+        console.error('Error removing highlights on sidebar close:', error);
+      }
+    });
+  }
+});
+
 chrome.runtime.onStartup.addListener(startUp);
 
 chrome.action.onClicked.addListener((tab) => {
@@ -297,6 +325,7 @@ TypedMessenger.onMessage('UI_REQUEST_INITIAL_STATE', async (payload, sender) => 
 
 TypedMessenger.onMessage('PERFORM_SEARCH', async (payload) => {
   const tabId = payload.tabId;
+  BackgroundMessenger.removeHighlights(tabId);
   const currentTabState = store.tabStates[tabId];
   if (!currentTabState || !currentTabState.url) {
      return { success: false, error: "No active tab state or URL in store" };

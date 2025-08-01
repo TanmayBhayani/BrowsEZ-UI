@@ -118,17 +118,13 @@ function highlightElement(elementMetadata: any, isLink = false): boolean {
     let tooltipContent = '';
     if (elementMetadata.explanation) {
       tooltipContent += `<div class="tooltip-explanation"><strong>Why this matches:</strong> ${elementMetadata.explanation}</div>`;
+      tooltip.innerHTML = tooltipContent;
+      // Position the tooltip near the element
+      const rect = element.getBoundingClientRect();
+      tooltip.style.top = `${rect.bottom + window.scrollY + 5}px`;
+      tooltip.style.left = `${rect.left + window.scrollX}px`;
     }
-    
-    tooltip.innerHTML = tooltipContent;
-    
-    // Position the tooltip near the element
-    const rect = element.getBoundingClientRect();
-    tooltip.style.top = `${rect.bottom + window.scrollY + 5}px`;
-    tooltip.style.left = `${rect.left + window.scrollX}px`;
-    
     document.body.appendChild(tooltip);
-    
     return true;
   } else {
     console.warn("Element with ID not found:", elementMetadata.element_id);
