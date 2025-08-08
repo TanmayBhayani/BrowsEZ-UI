@@ -17,9 +17,20 @@ initBackgroundSync();
 
 async function startUp() {
   
-  // Initialize session with API client
+  // Check authentication status first
   try {
-    const sessionData = await apiClient.initializeSession();
+    const authStatus = await apiClient.checkAuth();
+    
+    if (!authStatus.authenticated) {
+      console.log('User not authenticated, extension will wait for authentication');
+      // Don't automatically trigger login - let the UI handle it
+      // The extension will initialize when the user manually logs in
+      return;
+    }
+    
+    console.log('User authenticated:', authStatus.user?.email);
+    
+    // Initialize tabs for authenticated users
     await initializeAllTabs();
     await injectContentScriptsToAllTabs();
     await embedHTMLOfAllActiveTabs();
@@ -74,6 +85,45 @@ async function injectContentScriptsToTab(tabId: number): Promise<boolean> {
   }
 }
 
+async function embedHTML(tab: chrome.tabs.Tab): Promise<void> {
+  if (!tab.id || !tab.url) return;
+
+  // Consider only domains where extension is active
+  if (!isDomainActive(tab.url)) {
+    return;
+  }
+
+  // Ensure tab state exists
+  const tabState = getOrInitializeTabState(tab.id, tab.url);
+
+  // Skip if HTML already processed successfully
+  if (tabState.htmlProcessingStatus === 'ready') {
+    return;
+  }
+
+  try {
+    console.log(`Background: Requesting HTML from content script in tab ${tab.id}`);
+
+    // Mark as processing
+    store.updateTabState.updateHTMLProcessingStatus(tab.id, 'processing');
+
+    // Ask content script for HTML
+    const response = await BackgroundMessenger.getPageHTML(tab.id);
+
+    if (response.success && response.data) {
+      await apiClient.sendHTML(response.data.html, tab.id);
+      store.updateTabState.updateHTMLProcessingStatus(tab.id, 'ready');
+      console.log(`Background: HTML embedded for tab ${tab.id}`);
+    } else {
+      console.error(`Background: Could not retrieve HTML for tab ${tab.id}:`, response.error);
+      store.updateTabState.updateHTMLProcessingStatus(tab.id, 'error');
+    }
+  } catch (err) {
+    console.error(`Background: Error during HTML embed for tab ${tab.id}:`, err);
+    store.updateTabState.updateHTMLProcessingStatus(tab.id, 'error');
+  }
+}
+
 async function embedHTMLOfAllActiveTabs(): Promise<void> {
   try {
     console.log('Background: Starting to embed HTML for all active tabs');
@@ -82,42 +132,7 @@ async function embedHTMLOfAllActiveTabs(): Promise<void> {
     const tabs = await chrome.tabs.query({});
 
     for (const tab of tabs) {
-      if (!tab.id || !tab.url) continue;
-
-      // Consider only domains where extension is active
-      if (!isDomainActive(tab.url)) {
-        continue;
-      }
-
-      // Ensure tab state exists
-      const tabState = getOrInitializeTabState(tab.id, tab.url);
-
-      // Skip if HTML already processed successfully
-      if (tabState.htmlProcessingStatus === 'ready') {
-        continue;
-      }
-
-      try {
-        console.log(`Background: Requesting HTML from content script in tab ${tab.id}`);
-
-        // Mark as processing
-        store.updateTabState.updateHTMLProcessingStatus(tab.id, 'processing');
-
-        // Ask content script for HTML
-        const response = await BackgroundMessenger.getPageHTML(tab.id);
-
-        if (response.success && response.data) {
-          await apiClient.sendHTML(response.data.html, tab.id);
-          store.updateTabState.updateHTMLProcessingStatus(tab.id, 'ready');
-          console.log(`Background: HTML embedded for tab ${tab.id}`);
-        } else {
-          console.error(`Background: Could not retrieve HTML for tab ${tab.id}:`, response.error);
-          store.updateTabState.updateHTMLProcessingStatus(tab.id, 'error');
-        }
-      } catch (err) {
-        console.error(`Background: Error during HTML embed for tab ${tab.id}:`, err);
-        store.updateTabState.updateHTMLProcessingStatus(tab.id, 'error');
-      }
+      await embedHTML(tab);
     }
 
     console.log('Background: Finished embedding HTML for active tabs');
@@ -191,6 +206,15 @@ async function getActiveTab(): Promise<chrome.tabs.Tab | null> {
 // Event Listeners
 chrome.runtime.onInstalled.addListener(startUp);
 
+// Handle auth complete message from callback page
+chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+  if (message.type === 'AUTH_COMPLETE') {
+    console.log('Authentication completed, reloading extension...');
+    // Restart the extension to reinitialize with authenticated state
+    chrome.runtime.reload();
+  }
+});
+
 // Listen for sidebar disconnect (when sidebar closes)
 chrome.runtime.onConnect.addListener((port) => {
   console.log('BrowsEZ: Connection established:', port.name);
@@ -231,7 +255,17 @@ chrome.tabs.onRemoved.addListener((tabId) => {
   // Clean up from store
   store.clearTabState(tabId);
   console.log(`Cleaned up data for tab ${tabId}`);
-});
+  });
+
+  // chrome.tabs.onUpdated.addListener(async (tabId, changeInfo, tab) => {
+  //   if (changeInfo.status === 'complete') {
+  //     console.log(`Background: Page loaded: ${tab.url}`);
+  //     // Update Extension Store
+  //     const newTabState = { ...initialTabState, url: tab.url, isActive: isDomainActive(tab.url) };
+  //     store.setTabState(tabId, newTabState);
+  //     embedHTML(tab);
+  //   }
+  // });
 
 chrome.tabs.onActivated.addListener(async (activeInfo) => {
   console.log("Background: Tab activated:", activeInfo);
@@ -476,4 +510,27 @@ TypedMessenger.onMessage('CLEANUP_SESSION', async (payload, sender) => {
   return { success: true };
 });
 
-console.log('BrowsEZ: Modern background script fully initialized'); 
+// Handle authentication completion
+chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+  if (message.type === 'AUTH_COMPLETE') {
+    console.log('Authentication completed, reinitializing extension...');
+    
+    if (message.success) {
+      // Re-run startup process now that user is authenticated
+      startUp().then(() => {
+        console.log('Extension reinitialized after authentication');
+      }).catch((error) => {
+        console.error('Failed to reinitialize extension after authentication:', error);
+      });
+    } else {
+      console.log('Authentication failed:', message.error);
+    }
+    
+    sendResponse({ received: true });
+  }
+});
+
+console.log('BrowsEZ: Modern background script fully initialized');
+
+// Initialize on startup
+startUp(); 

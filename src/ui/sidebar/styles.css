@@ -29,6 +29,32 @@
   font-weight: 600;
 }
 
+.header-controls {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.settings-button {
+  padding: 0.5rem;
+  border: none;
+  border-radius: 4px;
+  background: rgba(255, 255, 255, 0.1);
+  color: white;
+  font-size: 1rem;
+  cursor: pointer;
+  transition: background-color 0.2s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 36px;
+  height: 36px;
+}
+
+.settings-button:hover {
+  background: rgba(255, 255, 255, 0.2);
+}
+
 .toggle-button {
   padding: 0.5rem 1rem;
   border: none;
@@ -313,4 +339,262 @@
   50% { width: 2ch; }
   75% { width: 3ch; }
   100% { width: 0ch; }
+}
+
+/* Auth components */
+.auth-header {
+  position: absolute;
+  top: 0;
+  right: 0;
+  left: 0;
+  padding: 10px 15px;
+  background-color: #f8f9fa;
+  border-bottom: 1px solid #e0e0e0;
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  z-index: 100;
+}
+
+.user-auth-container {
+  display: flex;
+  align-items: center;
+  position: relative;
+}
+
+.login-button {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 16px;
+  background-color: white;
+  border: 1px solid #e0e0e0;
+  border-radius: 4px;
+  font-size: 14px;
+  font-weight: 500;
+  color: #333;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.login-button:hover {
+  background-color: #f8f9fa;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+}
+
+.google-icon {
+  width: 18px;
+  height: 18px;
+}
+
+.user-info {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 8px;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: background-color 0.2s;
+}
+
+.user-info:hover {
+  background-color: #e8eaed;
+}
+
+.user-avatar {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  object-fit: cover;
+}
+
+.user-avatar-placeholder {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background-color: #a4c6f0;
+  color: white;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 600;
+  font-size: 14px;
+}
+
+.user-name {
+  font-size: 14px;
+  color: #333;
+  max-width: 150px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dropdown-arrow {
+  transition: transform 0.2s;
+}
+
+.user-dropdown {
+  position: absolute;
+  top: 100%;
+  right: 0;
+  margin-top: 4px;
+  background-color: white;
+  border: 1px solid #e0e0e0;
+  border-radius: 4px;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+  min-width: 200px;
+  z-index: 1000;
+}
+
+.dropdown-item {
+  padding: 8px 16px;
+  font-size: 14px;
+  color: #333;
+  cursor: pointer;
+  transition: background-color 0.2s;
+  border: none;
+  background: none;
+  width: 100%;
+  text-align: left;
+}
+
+.dropdown-item:hover {
+  background-color: #f8f9fa;
+}
+
+.user-email {
+  color: #666;
+  font-size: 13px;
+}
+
+.dropdown-divider {
+  height: 1px;
+  background-color: #e0e0e0;
+  margin: 4px 0;
+}
+
+.logout-button {
+  color: #dc3545;
+}
+
+.logout-button:hover {
+  background-color: #fee;
+}
+
+/* Auth required state */
+.auth-required {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+}
+
+.auth-prompt {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  text-align: center;
+}
+
+.auth-prompt h2 {
+  font-size: 24px;
+  margin-bottom: 10px;
+  color: #333;
+}
+
+.auth-prompt p {
+  font-size: 16px;
+  color: #666;
+  margin-bottom: 20px;
+}
+
+.auth-illustration {
+  font-size: 48px;
+  margin: 20px 0;
+}
+
+/* Adjust app container for auth header */
+.app-container {
+  padding-top: 50px;
+  position: relative;
+}
+
+.loading-spinner.small::after {
+  width: 20px;
+  height: 20px;
+  border-width: 2px;
+}
+
+/* Authentication error styles */
+.auth-error {
+  margin-top: 12px;
+  padding: 12px;
+  background-color: #ffeaea;
+  border: 1px solid #ffb3b3;
+  border-radius: 6px;
+  text-align: center;
+}
+
+.auth-error p {
+  margin: 0 0 8px 0;
+  color: #d73a49;
+  font-size: 14px;
+}
+
+.retry-button {
+  background-color: #fff;
+  border: 1px solid #d1d5da;
+  border-radius: 6px;
+  color: #24292e;
+  cursor: pointer;
+  font-size: 12px;
+  padding: 4px 12px;
+  transition: background-color 0.2s;
+}
+
+.retry-button:hover {
+  background-color: #f6f8fa;
+}
+
+/* System messages styling */
+.message.system {
+  background-color: #fff3cd;
+  border: 1px solid #ffecb5;
+  border-radius: 8px;
+  padding: 12px 16px;
+  margin: 12px 0;
+}
+
+.message.system .message-content {
+  color: #856404;
+  font-size: 14px;
+  line-height: 1.5;
+  white-space: pre-line;
+}
+
+/* Error messages with token limit */
+.message.system .message-content:has-text("⚠️") {
+  font-weight: 500;
+}
+
+/* Settings link button in chat */
+.open-settings-button {
+  display: inline-block;
+  margin-top: 12px;
+  padding: 8px 16px;
+  background-color: #007acc;
+  color: white;
+  border: none;
+  border-radius: 6px;
+  font-size: 14px;
+  cursor: pointer;
+  text-decoration: none;
+  transition: background-color 0.2s;
+}
+
+.open-settings-button:hover {
+  background-color: #0056b3;
 } 

@@ -62,3 +62,24 @@ export interface ExtensionState {
   // UI state
   sidebarOpen: boolean;
 } 
+export interface UsageStats {
+  usage: {
+    tokens: {
+      used: number;
+      limit: number;
+      percentage: number;
+      unlimited: boolean;
+    };
+    collections: {
+      count: number;
+      limit: number;
+      percentage: number;
+      unlimited: boolean;
+    };
+  };
+  user: {
+    email: string;
+    role: string;
+    name: string;
+  };
+}

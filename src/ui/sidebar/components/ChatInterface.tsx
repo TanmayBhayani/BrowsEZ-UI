@@ -11,8 +11,12 @@ export const ChatInterface: React.FC = () => {
   // Toggle extension activation
   const handleToggleActivation = useCallback(async () => {
     tabState.toggleActiveState();
-    // ApplicationMessenger.setActiveState(tabState.tabId, isActive);
   }, [tabState.tabId]);
+
+  // Open settings page
+  const handleOpenSettings = useCallback(() => {
+    chrome.tabs.create({ url: chrome.runtime.getURL('settings.html') });
+  }, []);
 
   // Send search message
   const handleSendMessage = useCallback(async (content: string, searchType: 'smart' | 'basic') => {
@@ -51,9 +55,16 @@ export const ChatInterface: React.FC = () => {
         console.error("Search failed:", response.error);
         // Update with error message
         if (tabState.searchState) {
+          let errorContent = `Search failed: ${response.error}`;
+          
+          // Check if it's a token limit error
+          if (response.error?.includes('Token limit exceeded') || response.error?.includes('429')) {
+            errorContent = `⚠️ Token Limit Reached\n\nYou have reached your monthly token limit. To continue using BrowsEZ:\n\n• Wait until next month when your limit resets\n• Upgrade to a paid plan for higher limits\n\nView your usage in Settings.`;
+          }
+          
           const errorMessage = {
             role: 'system' as const,
-            content: `Search failed: ${response.error}`,
+            content: errorContent,
             timestamp: new Date().toISOString(),
           };
           
@@ -66,6 +77,13 @@ export const ChatInterface: React.FC = () => {
             conversation: errorConversation,
             searchStatus: 'error'
           });
+          
+          // Open settings page if it's a token limit error
+          if (response.error?.includes('Token limit exceeded')) {
+            setTimeout(() => {
+              chrome.tabs.create({ url: chrome.runtime.getURL('settings.html') });
+            }, 2000);
+          }
         }
       }
     } catch (error) {
@@ -138,12 +156,21 @@ export const ChatInterface: React.FC = () => {
       <div className="chat-interface initializing">
         <div className="chat-header">
           <h3>BrowsEZ</h3>
-          <button 
-            className="toggle-button disabled"
-            disabled={true}
-          >
-            Initializing...
-          </button>
+          <div className="header-controls">
+            <button 
+              onClick={handleOpenSettings}
+              className="settings-button"
+              title="Settings"
+            >
+              ⚙️
+            </button>
+            <button 
+              className="toggle-button disabled"
+              disabled={true}
+            >
+              Initializing...
+            </button>
+          </div>
         </div>
         
         <div className="inactive-message">
@@ -161,13 +188,22 @@ export const ChatInterface: React.FC = () => {
       <div className="chat-interface inactive">
         <div className="chat-header">
           <h3>BrowsEZ</h3>
-          <button 
-            onClick={handleToggleActivation}
-            className="toggle-button inactive"
-            disabled={isLoading}
-          >
-            {isLoading ? 'Loading...' : 'Activate'}
-          </button>
+          <div className="header-controls">
+            <button 
+              onClick={handleOpenSettings}
+              className="settings-button"
+              title="Settings"
+            >
+              ⚙️
+            </button>
+            <button 
+              onClick={handleToggleActivation}
+              className="toggle-button inactive"
+              disabled={isLoading}
+            >
+              {isLoading ? 'Loading...' : 'Activate'}
+            </button>
+          </div>
         </div>
         
         <div className="inactive-message">
@@ -184,13 +220,22 @@ export const ChatInterface: React.FC = () => {
     <div className="chat-interface active">
       <div className="chat-header">
         <h3>BrowsEZ</h3>
-        <button 
-          onClick={handleToggleActivation}
-          className="toggle-button active"
-          disabled={isLoading}
-        >
-          {isLoading ? 'Loading...' : 'Deactivate'}
-        </button>
+        <div className="header-controls">
+          <button 
+            onClick={handleOpenSettings}
+            className="settings-button"
+            title="Settings"
+          >
+            ⚙️
+          </button>
+          <button 
+            onClick={handleToggleActivation}
+            className="toggle-button active"
+            disabled={isLoading}
+          >
+            {isLoading ? 'Loading...' : 'Deactivate'}
+          </button>
+        </div>
       </div>
       
       <ChatView 

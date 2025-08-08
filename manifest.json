@@ -13,6 +13,7 @@
   ],
   "host_permissions": [
     "https://find-production.up.railway.app/*",
+    "http://localhost:5000/*",
     "<all_urls>"
   ],
   "background": {
@@ -33,7 +34,7 @@
   ],
   "web_accessible_resources": [
     {
-      "resources": ["content.js", "assets/*"],
+      "resources": ["content.js", "assets/*", "callback.html"],
       "matches": ["<all_urls>"]
     }
   ]

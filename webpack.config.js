@@ -109,6 +109,12 @@ export default {
       chunks: ['settings'],
     }),
     
+    new HtmlWebpackPlugin({
+      template: 'src/ui/callback/index.html',
+      filename: 'callback.html',
+      chunks: [], // No JS chunks needed for callback page
+    }),
+    
     // Extract CSS in production
     ...(!isDev ? [new MiniCssExtractPlugin({
       filename: '[name].css',
