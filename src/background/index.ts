@@ -4,6 +4,7 @@ import { apiClient } from '@shared/api';
 import type { TabState } from '@shared/types/extension';
 import { ExtensionStore } from './ExtensionStore';
 import { initBackgroundSync } from './backgroundSyncer';
+import { initialTabState } from '@shared/state/tabStore';
 
 console.log('BrowsEZ: Modern background script loaded');
 
@@ -15,7 +16,21 @@ const store = ExtensionStore.getInstance();
 // not yet run (e.g. after a service-worker restart).
 initBackgroundSync();
 
+// Prevent duplicate startup flows
+let hasInitialized = false;
+let initInProgress = false;
+
 async function startUp() {
+  // Guard against concurrent or repeated initialization
+  if (initInProgress) {
+    console.log('StartUp already in progress, skipping');
+    return;
+  }
+  if (hasInitialized) {
+    console.log('StartUp already completed, skipping');
+    return;
+  }
+  initInProgress = true;
   
   // Check authentication status first
   try {
@@ -25,17 +40,32 @@ async function startUp() {
       console.log('User not authenticated, extension will wait for authentication');
       // Don't automatically trigger login - let the UI handle it
       // The extension will initialize when the user manually logs in
-      return;
+      return; // Leave hasInitialized=false so we can initialize after auth
     }
     
     console.log('User authenticated:', authStatus.user?.email);
+    // Hydrate active domains from server to ensure we have persisted state
+    try {
+      const serverDomains = await apiClient.getActiveDomains();
+      if (Array.isArray(serverDomains)) {
+        store.setActiveDomains(serverDomains, false);
+      }
+    } catch (e) {
+      console.log('Could not hydrate active domains from server:', e);
+    }
     
     // Initialize tabs for authenticated users
     await initializeAllTabs();
     await injectContentScriptsToAllTabs();
     await embedHTMLOfAllActiveTabs();
+
+    // Mark initialization complete only after successful authenticated init
+    hasInitialized = true;
   } catch (error) {
     console.error('Failed to initialize extension on startup:', error);
+  }
+  finally {
+    initInProgress = false;
   }
   // Initialize background syncer
   // initBackgroundSync(); // Already initialized at top-level above.
@@ -96,8 +126,8 @@ async function embedHTML(tab: chrome.tabs.Tab): Promise<void> {
   // Ensure tab state exists
   const tabState = getOrInitializeTabState(tab.id, tab.url);
 
-  // Skip if HTML already processed successfully
-  if (tabState.htmlProcessingStatus === 'ready') {
+  // Skip if HTML is already processed or in-progress
+  if (tabState.htmlProcessingStatus === 'ready' || tabState.htmlProcessingStatus === 'processing') {
     return;
   }
 
@@ -206,14 +236,7 @@ async function getActiveTab(): Promise<chrome.tabs.Tab | null> {
 // Event Listeners
 chrome.runtime.onInstalled.addListener(startUp);
 
-// Handle auth complete message from callback page
-chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
-  if (message.type === 'AUTH_COMPLETE') {
-    console.log('Authentication completed, reloading extension...');
-    // Restart the extension to reinitialize with authenticated state
-    chrome.runtime.reload();
-  }
-});
+// (Removed duplicate AUTH_COMPLETE listener that reloaded the extension)
 
 // Listen for sidebar disconnect (when sidebar closes)
 chrome.runtime.onConnect.addListener((port) => {
@@ -257,15 +280,15 @@ chrome.tabs.onRemoved.addListener((tabId) => {
   console.log(`Cleaned up data for tab ${tabId}`);
   });
 
-  // chrome.tabs.onUpdated.addListener(async (tabId, changeInfo, tab) => {
-  //   if (changeInfo.status === 'complete') {
-  //     console.log(`Background: Page loaded: ${tab.url}`);
-  //     // Update Extension Store
-  //     const newTabState = { ...initialTabState, url: tab.url, isActive: isDomainActive(tab.url) };
-  //     store.setTabState(tabId, newTabState);
-  //     embedHTML(tab);
-  //   }
-  // });
+chrome.tabs.onUpdated.addListener(async (tabId, changeInfo, tab) => {
+  if (changeInfo.status === 'complete') {
+    console.log(`Background: Page loaded: ${tab.url}`);
+    // Update Extension Store
+    const newTabState = { ...initialTabState, url: tab.url, isActive: isDomainActive(tab.url), tabId: tabId };
+    store.setTabState(tabId, newTabState);
+    embedHTML(tab);
+  }
+});
 
 chrome.tabs.onActivated.addListener(async (activeInfo) => {
   console.log("Background: Tab activated:", activeInfo);
@@ -517,6 +540,8 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     
     if (message.success) {
       // Re-run startup process now that user is authenticated
+      // Allow a fresh initialization after auth
+      hasInitialized = false;
       startUp().then(() => {
         console.log('Extension reinitialized after authentication');
       }).catch((error) => {
@@ -533,4 +558,4 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 console.log('BrowsEZ: Modern background script fully initialized');
 
 // Initialize on startup
-startUp(); 
+startUp();

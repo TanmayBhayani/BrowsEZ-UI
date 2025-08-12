@@ -182,7 +182,8 @@ export class ExtensionStore {
     const domain = new URL(url).hostname;
     if (!this.state.activeDomains.includes(domain)) {
       this.state.activeDomains.push(domain);
-      this.saveToStorage(); 
+      this.saveToStorage();
+      this.notify({ type: 'ACTIVE_DOMAINS_CHANGED', data: { activeDomains: this.state.activeDomains } });
     }
   }
 
@@ -190,6 +191,7 @@ export class ExtensionStore {
     const domain = new URL(url).hostname;
     this.state.activeDomains = this.state.activeDomains.filter((d: string) => d !== domain);
     this.saveToStorage();
+    this.notify({ type: 'ACTIVE_DOMAINS_CHANGED', data: { activeDomains: this.state.activeDomains } });
   }
 
   clearTabState(tabId: number, notify: boolean = true): void {
@@ -203,6 +205,14 @@ export class ExtensionStore {
   // Get the full state (useful for debugging or advanced operations)
   getState(): ExtensionState {
     return { ...this.state };
+  }
+
+  setActiveDomains(domains: string[], notify: boolean = true): void {
+    this.state.activeDomains = [...new Set(domains)];
+    this.saveToStorage();
+    if (notify) {
+      this.notify({ type: 'ACTIVE_DOMAINS_CHANGED', data: { activeDomains: this.state.activeDomains } });
+    }
   }
 
   // Reset the entire store (useful for testing or complete reset)

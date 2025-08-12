@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { createRoot } from 'react-dom/client';
 import { apiClient } from '@shared/api/client';
+import { BackgroundMessenger } from '@shared/utils/messaging';
 import { UsageStats } from '@shared/types/extension';
 import './styles.css';
 
@@ -8,9 +9,12 @@ const SettingsApp: React.FC = () => {
   const [usageStats, setUsageStats] = useState<UsageStats | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [activeDomains, setActiveDomains] = useState<string[]>([]);
+  const [newDomain, setNewDomain] = useState<string>('');
 
   useEffect(() => {
     fetchUsageStats();
+    fetchActiveDomains();
   }, []);
 
   const fetchUsageStats = async () => {
@@ -36,6 +40,36 @@ const SettingsApp: React.FC = () => {
     } finally {
       setLoading(false);
     }
+  };
+
+  const fetchActiveDomains = async () => {
+    try {
+      const domains = await apiClient.getActiveDomains();
+      setActiveDomains(domains);
+    } catch (e) {
+      // ignore
+    }
+  };
+
+  const handleAddDomain = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const trimmed = newDomain.trim();
+    if (!trimmed) return;
+    try {
+      const host = new URL(/^https?:\/\//.test(trimmed) ? trimmed : `https://${trimmed}`).hostname;
+      const next = Array.from(new Set([...activeDomains, host]));
+      setActiveDomains(next);
+      await BackgroundMessenger.setActiveDomains(next);
+      setNewDomain('');
+    } catch (err) {
+      alert('Please enter a valid domain or URL');
+    }
+  };
+
+  const handleRemoveDomain = async (domain: string) => {
+    const next = activeDomains.filter(d => d !== domain);
+    setActiveDomains(next);
+    await BackgroundMessenger.setActiveDomains(next);
   };
 
   const formatNumber = (num: number): string => {
@@ -136,6 +170,40 @@ const SettingsApp: React.FC = () => {
             </button>
           </div>
         )}
+      </section>
+
+      <section className="usage-section">
+        <h2>Active Domains</h2>
+        <div className="usage-card">
+          <form onSubmit={handleAddDomain} className="active-domain-form">
+            <input
+              type="text"
+              placeholder="Add domain (e.g., example.com)"
+              value={newDomain}
+              onChange={(e) => setNewDomain(e.target.value)}
+              className="active-domain-input"
+            />
+            <button type="submit" className="add-domain-button">Add</button>
+          </form>
+          {activeDomains.length === 0 ? (
+            <p className="empty-text">No active domains yet.</p>
+          ) : (
+            <ul className="active-domain-list">
+              {activeDomains.map((d) => (
+                <li key={d} className="active-domain-item">
+                  <span className="domain-text">{d}</span>
+                  <button
+                    className="remove-domain-button"
+                    title="Remove"
+                    onClick={() => handleRemoveDomain(d)}
+                  >
+                    ×
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
       </section>
 
       <section className="info-section">

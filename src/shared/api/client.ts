@@ -1,9 +1,9 @@
 // API Client - Centralized API communication layer
 
 import { ConversationMessage } from '../types/extension';
-const API_BASE_URL = 'https://find-production.up.railway.app';
+// const API_BASE_URL = 'https://find-production.up.railway.app';
 
-// const API_BASE_URL = 'http://localhost:5000';
+const API_BASE_URL = 'http://localhost:5000';
 
 export interface SessionResponse {
   sessionId?: string;
@@ -39,12 +39,17 @@ export interface AuthStatus {
   user: AuthUser | null;
 }
 
+export interface ActiveDomainsResponse {
+  active_domains: string[];
+}
+
 class APIClient {
   private baseUrl: string;
   private retryCount: number;
   private authChecked: boolean = false;
   private currentUser: AuthUser | null = null;
   private loginInProgress: boolean = false;
+  private authCheckPromise: Promise<AuthStatus> | null = null;
 
   constructor(baseUrl: string = API_BASE_URL, retryCount: number = 3) {
     this.baseUrl = baseUrl;
@@ -126,6 +131,7 @@ class APIClient {
    */
   async search(searchString: string, tabId: number, useLlmFiltering = true, conversation?: ConversationMessage[]): Promise<SearchResponse> {
     // Build the conversation payload
+    console.log("Sending search request to server");
     const payload = {
       conversation: conversation || [
         {
@@ -191,25 +197,41 @@ class APIClient {
    * Check authentication status
    */
   async checkAuth(): Promise<AuthStatus> {
-    try {
-      const response = await fetch(`${this.baseUrl}/auth/user`, {
-        method: 'GET',
-        credentials: 'include',
-        headers: {
-          'Content-Type': 'application/json'
-        }
-      });
-
-      const data = await response.json();
-      this.authChecked = true;
-      this.currentUser = data.user;
-      return data as AuthStatus;
-    } catch (error) {
-      console.error('Failed to check auth status:', error);
-      this.authChecked = true;
-      this.currentUser = null;
-      return { authenticated: false, user: null };
+    // If we've already checked, return cached result
+    if (this.authChecked) {
+      return { authenticated: !!this.currentUser, user: this.currentUser };
     }
+
+    // Deduplicate concurrent calls
+    if (this.authCheckPromise) {
+      return this.authCheckPromise;
+    }
+
+    this.authCheckPromise = (async () => {
+      try {
+        const response = await fetch(`${this.baseUrl}/auth/user`, {
+          method: 'GET',
+          credentials: 'include',
+          headers: {
+            'Content-Type': 'application/json'
+          }
+        });
+
+        const data = await response.json();
+        this.authChecked = true;
+        this.currentUser = data.user;
+        return data as AuthStatus;
+      } catch (error) {
+        console.error('Failed to check auth status:', error);
+        this.authChecked = true;
+        this.currentUser = null;
+        return { authenticated: false, user: null };
+      } finally {
+        this.authCheckPromise = null;
+      }
+    })();
+
+    return this.authCheckPromise;
   }
 
   /**
@@ -273,6 +295,39 @@ class APIClient {
       this.authChecked = false;
       throw error;
     }
+  }
+
+  /**
+   * Get user's active domains (persisted on server)
+   */
+  async getActiveDomains(): Promise<string[]> {
+    const response = await fetch(`${this.baseUrl}/user/active_domains`, {
+      method: 'GET',
+      credentials: 'include',
+      headers: { 'Content-Type': 'application/json' },
+    });
+    if (response.status === 401) {
+      return [];
+    }
+    const data: ActiveDomainsResponse = await response.json();
+    return Array.isArray(data.active_domains) ? data.active_domains : [];
+  }
+
+  /**
+   * Set user's active domains (persist on server)
+   */
+  async setActiveDomains(activeDomains: string[]): Promise<string[]> {
+    const response = await fetch(`${this.baseUrl}/user/active_domains`, {
+      method: 'POST',
+      credentials: 'include',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ active_domains: activeDomains }),
+    });
+    if (response.status === 401) {
+      throw new Error('Authentication required - please login');
+    }
+    const data = await response.json();
+    return Array.isArray(data.active_domains) ? data.active_domains : activeDomains;
   }
 }
 

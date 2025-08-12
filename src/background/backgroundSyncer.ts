@@ -2,6 +2,7 @@ import { ExtensionStore, type StoreChangeEvent } from './ExtensionStore';
 import { BackgroundMessenger, TypedMessenger } from '@shared/utils/messaging';
 import { ToggleActiveStateAction } from './actions/ToggleActiveState_action';
 import type { TabState } from '@shared/types/extension';
+import { apiClient } from '@shared/api/client';
 
 /**
  * Background Syncer - Automatically syncs ExtensionStore state changes to the sidebar
@@ -63,6 +64,21 @@ class BackgroundSyncer {
       }
       try {
         ToggleActiveStateAction(tabId, isActive, domain);
+        return { success: true };
+      } catch (e:any) {
+        return { success: false, error: e.message };
+      }
+    });
+
+    // Allow settings page to overwrite active domains list
+    TypedMessenger.onMessage('SET_ACTIVE_DOMAINS', async (payload) => {
+      const { activeDomains } = payload as { activeDomains: string[] };
+      try {
+        this.store.setActiveDomains(activeDomains);
+        const auth = await apiClient.checkAuth();
+        if (auth.authenticated) {
+          await apiClient.setActiveDomains(activeDomains);
+        }
         return { success: true };
       } catch (e:any) {
         return { success: false, error: e.message };

@@ -206,6 +206,10 @@ export const BackgroundMessenger = {
   async sendTabStateUpdate(tabId: number, tabState: TabState | null) {
     console.log('Sending BACKGROUND_STATE_UPDATE to sidebar:', tabId, tabState);
     return TypedMessenger.send('BACKGROUND_STATE_UPDATE', { tabId, tabState }, 'background', 'sidebar');
+  },
+  async setActiveDomains(activeDomains: string[]) {
+    console.log('Sending SET_ACTIVE_DOMAINS to background:', activeDomains);
+    return TypedMessenger.send('SET_ACTIVE_DOMAINS', { activeDomains }, 'background', 'background');
   }
 };
 

@@ -9,6 +9,13 @@ export async function ToggleActiveStateAction(tabId: number, isActive: boolean, 
     store.updateTabState.updateBasicInfo(tabId, {isActive}, false);
     if(isActive){
         store.addActiveDomain(domain);
+        // Persist active domains for authenticated users
+        try {
+          const auth = await apiClient.checkAuth();
+          if (auth.authenticated) {
+            await apiClient.setActiveDomains(store.activeDomains);
+          }
+        } catch {}
         const htmlResponse = await BackgroundMessenger.getPageHTML(tabId);
         if(htmlResponse.success){
             const html = htmlResponse.data.html;
@@ -22,6 +29,13 @@ export async function ToggleActiveStateAction(tabId: number, isActive: boolean, 
         }
     }else{
         store.removeActiveDomain(domain);
+        // Persist active domains for authenticated users
+        try {
+          const auth = await apiClient.checkAuth();
+          if (auth.authenticated) {
+            await apiClient.setActiveDomains(store.activeDomains);
+          }
+        } catch {}
     }
   } catch (error) {
     console.error('Failed to toggle active state:', error);

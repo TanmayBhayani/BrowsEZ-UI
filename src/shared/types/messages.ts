@@ -71,6 +71,10 @@ export interface MessageSchema {
     payload: SendHtmlPayload;
     response: {};
   };
+  'SET_ACTIVE_DOMAINS': {
+    payload: { activeDomains: string[] };
+    response: {};
+  };
   'GET_TAB_ID': {
     payload: {};
     response: number | null;
