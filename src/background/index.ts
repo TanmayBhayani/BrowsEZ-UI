@@ -255,7 +255,7 @@ chrome.runtime.onConnect.addListener((port) => {
               await BackgroundMessenger.removeHighlights(tab.id);
             } catch (error) {
               // Silently handle errors for tabs that might not have content scripts
-              console.log(`Could not remove highlights from tab ${tab.id}:`, error);
+              console.error(`Could not remove highlights from tab ${tab.id}:`, error);
             }
           }
         }

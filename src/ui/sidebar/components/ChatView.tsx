@@ -1,6 +1,6 @@
 import React from 'react';
 import { useTabStore, selectDisplayConversation } from '@shared/state/tabStore';
-import { formatLlmAnswer } from '../utils/formatLlmAnswer';
+import MarkdownMessage from './MarkdownMessage';
 
 interface ChatViewProps {
   onNavigate: (direction: 'next' | 'prev') => void;
@@ -23,7 +23,7 @@ export const ChatView: React.FC<ChatViewProps> = ({ onNavigate }) => {
           ) : (
             <div className="message-content">
               {message.role === 'assistant' ? (
-                <div dangerouslySetInnerHTML={{ __html: formatLlmAnswer(message.content) }} />
+                <MarkdownMessage content={message.content} />
               ) : (
                 message.content
               )}
