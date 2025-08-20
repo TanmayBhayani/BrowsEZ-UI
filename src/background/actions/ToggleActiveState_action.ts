@@ -2,6 +2,7 @@
 import { BackgroundMessenger } from '@shared/utils/messaging';
 import { apiClient } from '@shared/api/client';
 import { ExtensionStore } from '../ExtensionStore';
+import { getTabManager } from '../TabManager';
 
 export async function ToggleActiveStateAction(tabId: number, isActive: boolean, domain: string) {
   try {
@@ -16,17 +17,8 @@ export async function ToggleActiveStateAction(tabId: number, isActive: boolean, 
             await apiClient.setActiveDomains(store.activeDomains);
           }
         } catch {}
-        const htmlResponse = await BackgroundMessenger.getPageHTML(tabId);
-        if(htmlResponse.success){
-            const html = htmlResponse.data.html;
-            store.updateTabState.updateHTMLProcessingStatus(tabId, 'processing');
-            const response = await apiClient.sendHTML(html, tabId);
-            if(response.status === 200){
-                store.updateTabState.updateHTMLProcessingStatus(tabId, 'ready');
-            }else{
-                store.updateTabState.updateHTMLProcessingStatus(tabId, 'error');
-            }
-        }
+        // Delegate to TabManager for reconciliation and embedding
+        await getTabManager().reconcileTab(tabId);
     }else{
         store.removeActiveDomain(domain);
         // Persist active domains for authenticated users

@@ -66,17 +66,36 @@ style.textContent = `
 document.head.appendChild(style);
 
 // Utility Functions
-function generateUniqueId(): string {
-  return 'el_' + Math.floor(rng() * 1000000000).toString(36);
+function getDeterministicPath(element: Element): string {
+  const parts: string[] = [];
+  let current: Element | null = element;
+  while (current && current.nodeType === Node.ELEMENT_NODE && current !== document.body) {
+    const tag = current.tagName.toLowerCase();
+    let index = 0;
+    let sibling = current.previousElementSibling;
+    while (sibling) {
+      if (sibling.tagName === current.tagName) index++;
+      sibling = sibling.previousElementSibling as Element | null;
+    }
+    parts.push(`${tag}:${index}`);
+    current = current.parentElement;
+  }
+  return parts.reverse().join('/');
 }
 
-function addDataAttributesToElements(element: Element, prefix = ''): void {
+function generateDeterministicId(element: Element): string {
+  // Use the DOM path as a stable identifier
+  return 'el_' + getDeterministicPath(element);
+}
+
+function addDataAttributesToElements(element: Element, _prefix = ''): void {
   if (element.nodeType === Node.ELEMENT_NODE) {
-    const uniqueId = generateUniqueId();
-    element.setAttribute('data-element-id', uniqueId);
-    
+    if (!element.hasAttribute('data-element-id')) {
+      const deterministicId = generateDeterministicId(element);
+      element.setAttribute('data-element-id', deterministicId);
+    }
     for (let i = 0; i < element.children.length; i++) {
-      addDataAttributesToElements(element.children[i], prefix + i + '_');
+      addDataAttributesToElements(element.children[i] as Element);
     }
   }
 }
@@ -251,6 +270,11 @@ TypedMessenger.onMessage('GET_PAGE_HTML', async (payload, sender) => {
   const html = document.documentElement.outerHTML;
   return { success: true, data: { html } };
 });
+
+TypedMessenger.onMessage('PING', async () => {
+  return { success: true, data: { ok: true } };
+});
+
 
 
 TypedMessenger.onMessage('NAVIGATE_TO_LINK', async (payload, sender) => {

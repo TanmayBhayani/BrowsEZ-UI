@@ -31,6 +31,10 @@ export interface MessageSchema {
     payload: { tabId: number; tabState: TabState | null };
     response: {};
   };
+  'PING': {
+    payload: {};
+    response: { ok: boolean };
+  };
   'PERFORM_SEARCH': {
     payload: SearchPayload;
     response: {};

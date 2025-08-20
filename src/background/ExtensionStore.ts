@@ -86,7 +86,7 @@ export class ExtensionStore {
   }
 
   updateTabState = {
-    updateBasicInfo: (tabId: number, updates: Partial<Pick<TabState, 'url' | 'title' | 'isActive' | 'lastProcessedHTML' | 'isContentScriptActive'>>, notify: boolean = true) => {
+    updateBasicInfo: (tabId: number, updates: Partial<Pick<TabState, 'url' | 'title' | 'isActive' | 'lastProcessedHTML' | 'isContentScriptActive' | 'pageDigest' | 'lastError'>>, notify: boolean = true) => {
       if (!this.state.tabStates[tabId]) {
         this.initializeTabState(tabId);
       }
@@ -121,6 +121,16 @@ export class ExtensionStore {
         this.notify({ type: 'TAB_STATE_UPDATED', tabId, data: { searchStateUpdates } });
       }
     },
+    setError: (tabId: number, error: { code: string; message: string }, notify: boolean = true) => {
+      if (!this.state.tabStates[tabId]) {
+        this.initializeTabState(tabId);
+      }
+      this.state.tabStates[tabId].lastError = error;
+      this.saveToStorage();
+      if(notify){
+        this.notify({ type: 'TAB_STATE_UPDATED', tabId, data: { lastError: error } });
+      }
+    }
   };
 
   updateSearchPosition(tabId: number, position: number): void {
@@ -185,6 +195,10 @@ export class ExtensionStore {
       this.saveToStorage();
       this.notify({ type: 'ACTIVE_DOMAINS_CHANGED', data: { activeDomains: this.state.activeDomains } });
     }
+  }
+
+  getActiveDomains(): string[] {
+    return this.state.activeDomains;
   }
 
   removeActiveDomain(url: string): void {

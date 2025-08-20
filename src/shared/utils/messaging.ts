@@ -192,10 +192,16 @@ export const BackgroundMessenger = {
     return TypedMessenger.send('REMOVE_HIGHLIGHTS', { tabId }, 'background', 'content', tabId);
   },
 
+  async ping(tabId: number) {
+    console.log('Sending PING to content:', tabId);
+    return TypedMessenger.send('PING', {}, 'background', 'content', tabId);
+  },
+
   async getPageHTML(tabId: number) {
     console.log('Sending GET_PAGE_HTML to content:', tabId);
     return TypedMessenger.send('GET_PAGE_HTML', {}, 'background', 'content', tabId);
   },
+
 
   async navigateToLink(tabId: number, elementId: string, href: string) {
     console.log('Sending NAVIGATE_TO_LINK to content:', tabId, elementId, href);

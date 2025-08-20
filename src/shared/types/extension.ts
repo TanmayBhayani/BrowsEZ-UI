@@ -43,7 +43,9 @@ export interface TabState {
   isContentScriptActive: boolean;
   isActive: boolean;
   htmlProcessingStatus: 'not_sent' | 'processing' | 'ready' | 'error';
-  lastProcessedHTML: string | null;
+  lastProcessedHTML?: string | null;
+  lastError?: { code: string; message: string } | null;
+  pageDigest?: string | null;
   searchState: SearchState;
 }
 

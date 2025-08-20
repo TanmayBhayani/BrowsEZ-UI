@@ -172,6 +172,53 @@ class APIClient {
   }
 
   /**
+   * Compute hash for HTML content on the backend
+   */
+  async computeHash(html: string): Promise<{ hash: string; element_count?: number }> {
+    const response = await fetch(`${this.baseUrl}/compute_hash`, {
+      method: 'POST',
+      credentials: 'include',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ html })
+    });
+
+    if (!response.ok) {
+      throw new Error(`Failed to compute hash: ${response.statusText}`);
+    }
+
+    return response.json();
+  }
+
+  /**
+   * Check whether a collection exists for the current session+tabId
+   */
+  async collectionExists(tabId: number, pageHash?: string): Promise<{ exists: boolean; collection_name?: string; hashMatch?: boolean; status?: number }> {
+    try {
+      const url = new URL(`${this.baseUrl}/collection_exists`);
+      url.searchParams.set('tabId', String(tabId));
+      if (pageHash) url.searchParams.set('pageHash', pageHash);
+      const response = await fetch(url.toString(), {
+        method: 'GET',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+      });
+      if (response.status === 404) {
+        return { exists: false, status: 404 };
+      }
+      if (response.status === 401) {
+        throw new Error('Authentication required - please login');
+      }
+      const data = await response.json();
+      return { exists: !!data.exists, collection_name: data.collection_name, hashMatch: data.hashMatch, status: response.status };
+    } catch (e) {
+      // Treat failures as non-existence without crashing the UX
+      return { exists: false };
+    }
+  }
+
+  /**
    * Clean up session on server
    */
   async cleanupSession(sessionId: string): Promise<void> {
