@@ -72,8 +72,8 @@ export interface UsageStats {
       percentage: number;
       unlimited: boolean;
     };
-    collections: {
-      count: number;
+    embeddedPages: {
+      used: number;
       limit: number;
       percentage: number;
       unlimited: boolean;

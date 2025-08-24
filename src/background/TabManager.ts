@@ -93,9 +93,14 @@ export class TabManager {
       state = this.store.tabStates[tabId];
     }
 
-    // Ensure URL is up to date
+    // Ensure URL is up to date; if URL changed, reset snapshot and digest
     if (tab.url !== state.url) {
-      this.store.updateTabState.updateBasicInfo(tabId, { url: tab.url }, false);
+      this.store.updateTabState.updateBasicInfo(tabId, { 
+        url: tab.url, 
+        lastProcessedHTML: null, 
+        pageDigest: null
+      }, false);
+      this.store.updateTabState.updateHTMLProcessingStatus(tabId, 'not_sent');
     }
 
     // Ensure isActive is up to date
@@ -157,12 +162,11 @@ export class TabManager {
         return;
       }
 
-      // Refresh digest and ask server if collection exists and matches before re-embedding
+      // Refresh digest from snapshotted HTML and ask server if collection exists
       await this.refreshDigest(tabId);
       const currentDigest = this.store.tabStates[tabId]?.pageDigest || undefined;
       try {
         console.log('Background: Checking if collection exists', currentDigest);
-        this.store.updateTabState.updateHTMLProcessingStatus(tabId, 'processing');
         const exists = await apiClient.collectionExists(tabId, currentDigest);
         if (exists.exists && (exists.hashMatch === true || exists.status === 200)) {
           this.store.updateTabState.updateHTMLProcessingStatus(tabId, 'ready');
@@ -170,22 +174,27 @@ export class TabManager {
         }
       } catch {}
 
-      // Ask content for HTML and embed
-      const htmlResp = await BackgroundMessenger.getPageHTML(tabId);
-      if (!htmlResp.success || !htmlResp.data?.html) {
-        this.setError(tabId, 'HTML_CAPTURE_FAILED', 'Could not capture page HTML');
-        return;
+      // Use snapshotted HTML for embedding (capture once if missing)
+      let snapshotHTML = this.store.tabStates[tabId]?.lastProcessedHTML || null;
+      if (!snapshotHTML) {
+        const htmlResp = await BackgroundMessenger.getPageHTML(tabId);
+        if (!htmlResp.success || !htmlResp.data?.html) {
+          this.setError(tabId, 'HTML_CAPTURE_FAILED', 'Could not capture page HTML');
+          return;
+        }
+        snapshotHTML = htmlResp.data.html;
+        this.store.updateTabState.updateBasicInfo(tabId, { lastProcessedHTML: snapshotHTML }, false);
       }
-      this.store.updateTabState.updateHTMLProcessingStatus(tabId, 'processing', false);
+      this.store.updateTabState.updateHTMLProcessingStatus(tabId, 'processing');
       try {
-        const resp = await apiClient.sendHTML(htmlResp.data.html, tabId);
+        const resp = await apiClient.sendHTML(snapshotHTML, tabId);
         if (resp.status === 200) {
-          this.store.updateTabState.updateHTMLProcessingStatus(tabId, 'ready', false);
+          this.store.updateTabState.updateHTMLProcessingStatus(tabId, 'ready');
         } else {
-          this.store.updateTabState.updateHTMLProcessingStatus(tabId, 'error', false);
+          this.store.updateTabState.updateHTMLProcessingStatus(tabId, 'error');
         }
       } catch (e: any) {
-        this.store.updateTabState.updateHTMLProcessingStatus(tabId, 'error', false);
+        this.store.updateTabState.updateHTMLProcessingStatus(tabId, 'error');
         this.setError(tabId, 'EMBED_FAILED', e?.message || 'Failed to embed HTML');
       }
     } catch (e) {
@@ -195,12 +204,19 @@ export class TabManager {
 
   async refreshDigest(tabId: number): Promise<void> {
     try {
-      const htmlResp = await BackgroundMessenger.getPageHTML(tabId);
-      if (!htmlResp.success || !htmlResp.data?.html) {
-        this.setError(tabId, 'HTML_CAPTURE_FAILED', 'Could not capture page HTML');
-        return;
+      // Prefer previously snapshotted HTML; if absent, capture once and store
+      let snapshotHTML = this.store.tabStates[tabId]?.lastProcessedHTML || null;
+      if (!snapshotHTML) {
+        const htmlResp = await BackgroundMessenger.getPageHTML(tabId);
+        if (!htmlResp.success || !htmlResp.data?.html) {
+          this.setError(tabId, 'HTML_CAPTURE_FAILED', 'Could not capture page HTML');
+          return;
+        }
+        snapshotHTML = htmlResp.data.html;
+        this.store.updateTabState.updateBasicInfo(tabId, { lastProcessedHTML: snapshotHTML }, false);
       }
-      const digestResp = await apiClient.computeHash(htmlResp.data.html);
+
+      const digestResp = await apiClient.computeHash(snapshotHTML);
       this.store.updateTabState.updateBasicInfo(tabId, { pageDigest: digestResp.hash }, false);
     } catch (e) {
       this.setError(tabId, 'UNKNOWN', 'Failed to refresh digest');

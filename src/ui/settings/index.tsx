@@ -161,6 +161,39 @@ const SettingsApp: React.FC = () => {
           )}
         </div>
 
+        <div className="usage-card">
+          <div className="usage-header">
+            <h3>Embedded Pages</h3>
+            <span className="usage-label">Total</span>
+          </div>
+
+          {usageStats.usage.embeddedPages.unlimited ? (
+            <div className="unlimited-usage">
+              <span className="usage-count">{formatNumber(usageStats.usage.embeddedPages.used)}</span>
+              <span className="usage-limit">Unlimited</span>
+            </div>
+          ) : (
+            <>
+              <div className="usage-details">
+                <span className="usage-count">{formatNumber(usageStats.usage.embeddedPages.used)}</span>
+                <span className="usage-limit">/ {formatNumber(usageStats.usage.embeddedPages.limit)} pages</span>
+              </div>
+              <div className="progress-bar">
+                <div
+                  className="progress-fill"
+                  style={{
+                    width: `${Math.min(usageStats.usage.embeddedPages.percentage, 100)}%`,
+                    backgroundColor: getProgressBarColor(usageStats.usage.embeddedPages.percentage)
+                  }}
+                />
+              </div>
+              <div className="usage-percentage">
+                {usageStats.usage.embeddedPages.percentage.toFixed(1)}% used
+              </div>
+            </>
+          )}
+        </div>
+
         {usageStats.user.role === 'free_user' && (
           <div className="upgrade-prompt">
             <h3>Need more tokens?</h3>
