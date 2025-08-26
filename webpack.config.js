@@ -21,6 +21,7 @@ export default {
     // UI applications
     sidebar: './src/ui/sidebar/index.tsx',
     settings: './src/ui/settings/index.tsx',
+    callback: './src/ui/callback/index.ts',
   },
   
   output: {
@@ -112,7 +113,7 @@ export default {
     new HtmlWebpackPlugin({
       template: 'src/ui/callback/index.html',
       filename: 'callback.html',
-      chunks: [], // No JS chunks needed for callback page
+      chunks: ['callback'],
     }),
     
     // Extract CSS in production

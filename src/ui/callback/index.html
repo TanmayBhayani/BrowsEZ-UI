@@ -47,105 +47,10 @@
 <body>
   <div class="container">
     <div class="success-icon">✅</div>
-    <h1>Authentication Successful!</h1>
-    <p>You have successfully logged in to BrowsEZ.</p>
-    <p>This tab will close automatically in <span class="countdown">3</span> seconds...</p>
-    <p>You can now use the extension in your browser tabs.</p>
+    <h1></h1>
+    <p></p>
   </div>
 
-  <script>
-    // Check URL parameters for OAuth result
-    const urlParams = new URLSearchParams(window.location.search);
-    const hasCode = urlParams.has('code');
-    const hasError = urlParams.has('error');
-    
-    // Update UI based on OAuth result
-    const container = document.querySelector('.container');
-    const icon = document.querySelector('.success-icon');
-    const title = document.querySelector('h1');
-    const message = document.querySelector('p');
-    
-    let countdown = 3;
-    const countdownEl = document.querySelector('.countdown');
-    
-    if (hasError) {
-      icon.textContent = '❌';
-      title.textContent = 'Authentication Failed';
-      message.innerHTML = `
-        <p>There was an error during authentication:</p>
-        <p style="color: #d73a49; font-weight: 600;">${urlParams.get('error_description') || urlParams.get('error') || 'Unknown error'}</p>
-        <p>This tab will close automatically in <span class="countdown">5</span> seconds...</p>
-        <p>Please try logging in again.</p>
-      `;
-      countdown = 5;
-    } else if (hasCode) {
-      // OAuth was successful
-      icon.textContent = '✅';
-      title.textContent = 'Authentication Successful!';
-      message.innerHTML = `
-        <p>You have successfully logged in to BrowsEZ.</p>
-        <p>This tab will close automatically in <span class="countdown">3</span> seconds...</p>
-        <p>You can now use the extension in your browser tabs.</p>
-      `;
-    } else {
-      // Unexpected state
-      icon.textContent = '⚠️';
-      title.textContent = 'Unexpected Response';
-      message.innerHTML = `
-        <p>The authentication response was unexpected.</p>
-        <p>This tab will close automatically in <span class="countdown">3</span> seconds...</p>
-        <p>Please try logging in again.</p>
-      `;
-    }
-    
-    // Update countdown display
-    const newCountdownEl = document.querySelector('.countdown');
-    if (newCountdownEl) {
-      newCountdownEl.textContent = countdown;
-    }
-    
-    // Auto-close after countdown
-    const timer = setInterval(() => {
-      countdown--;
-      if (newCountdownEl) {
-        newCountdownEl.textContent = countdown;
-      }
-      
-      if (countdown <= 0) {
-        clearInterval(timer);
-        
-        // Notify extension about auth completion
-        try {
-          if (typeof chrome !== 'undefined' && chrome.runtime) {
-            chrome.runtime.sendMessage({ 
-              type: 'AUTH_COMPLETE',
-              success: hasCode && !hasError,
-              error: hasError ? (urlParams.get('error_description') || urlParams.get('error')) : null
-            });
-          }
-        } catch (error) {
-          console.log('Could not send message to extension:', error);
-        }
-        
-        // Close the tab
-        window.close();
-      }
-    }, 1000);
-    
-    // Also handle manual close
-    window.addEventListener('beforeunload', () => {
-      try {
-        if (typeof chrome !== 'undefined' && chrome.runtime) {
-          chrome.runtime.sendMessage({ 
-            type: 'AUTH_COMPLETE',
-            success: hasCode && !hasError,
-            error: hasError ? (urlParams.get('error_description') || urlParams.get('error')) : null
-          });
-        }
-      } catch (error) {
-        console.log('Could not send message to extension on unload:', error);
-      }
-    });
-  </script>
+  <script src="callback.js"></script>
 </body>
 </html>

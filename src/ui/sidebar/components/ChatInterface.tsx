@@ -120,6 +120,11 @@ export const ChatInterface: React.FC = () => {
     }
   }, []);
 
+  // Dismiss error banner
+  const handleDismissError = useCallback(() => {
+    tabState.clearError();
+  }, [tabState]);
+
   // Navigation handler
   const handleNavigation = useCallback(async (direction: 'next' | 'prev') => {
     try {
@@ -176,6 +181,13 @@ export const ChatInterface: React.FC = () => {
           </div>
         </div>
         
+        {tabState.lastError && (
+          <div className="error-banner" role="alert" aria-live="polite">
+            <span className="error-text">{tabState.lastError.message}</span>
+            <button className="error-dismiss" aria-label="Dismiss error" onClick={handleDismissError}>×</button>
+          </div>
+        )}
+        
         <div className="inactive-message">
           <div className="inactive-icon">⏳</div>
           <h4>Extension Initializing</h4>
@@ -212,6 +224,13 @@ export const ChatInterface: React.FC = () => {
           </div>
         </div>
         
+        {tabState.lastError && (
+          <div className="error-banner" role="alert" aria-live="polite">
+            <span className="error-text">{tabState.lastError.message}</span>
+            <button className="error-dismiss" aria-label="Dismiss error" onClick={handleDismissError}>×</button>
+          </div>
+        )}
+        
         <div className="inactive-message">
           <div className="inactive-icon">🔍</div>
           <h4>Extension Inactive</h4>
@@ -246,6 +265,13 @@ export const ChatInterface: React.FC = () => {
           </button>
         </div>
       </div>
+      
+      {tabState.lastError && (
+        <div className="error-banner" role="alert" aria-live="polite">
+          <span className="error-text">{tabState.lastError.message}</span>
+          <button className="error-dismiss" aria-label="Dismiss error" onClick={handleDismissError}>×</button>
+        </div>
+      )}
       
       <ChatView 
         onNavigate={handleNavigation}

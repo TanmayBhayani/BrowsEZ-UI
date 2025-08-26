@@ -36,7 +36,7 @@ async function startUp() {
   
   // Check authentication status first
   try {
-    const authStatus = await apiClient.checkAuth();
+    const authStatus = await apiClient.checkAuth(true);
     
     if (!authStatus.authenticated) {
       console.warn('User not authenticated, extension will wait for authentication');
@@ -69,11 +69,6 @@ async function startUp() {
   // Initialize background syncer
   // initBackgroundSync(); // Already initialized at top-level above.
 }
-
-
-
-
-
 
 // Moved to TabManager: embedHTMLOfAllActiveTabs()
 
@@ -328,27 +323,30 @@ TypedMessenger.onMessage('CLEANUP_SESSION', async (payload, sender) => {
   return { success: true };
 });
 
-// Handle authentication completion
-chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
-  if (message.type === 'AUTH_COMPLETE') {
-    console.log('Authentication completed, reinitializing extension...');
-    
-    if (message.success) {
-      // Re-run startup process now that user is authenticated
-      // Allow a fresh initialization after auth
-      hasInitialized = false;
-      startUp().then(() => {
-        console.log('Extension reinitialized after authentication');
-      }).catch((error) => {
-        console.error('Failed to reinitialize extension after authentication:', error);
-      });
-    } else {
-      console.log('Authentication failed:', message.error);
-    }
-    
-    sendResponse({ received: true });
+// Handle authentication completion (TypedMessenger path)
+TypedMessenger.onMessage('AUTH_COMPLETE', async (payload) => {
+  console.log('AUTH_COMPLETE received via TypedMessenger; reinitializing extension...');
+  hasInitialized = false;
+  if(payload.success) {
+    await startUp();
+  } else {
+    console.error('Authentication failed:', payload.error);
   }
+  return { success: true };
 });
+
+// Keep a fallback raw listener for robustness if needed (optional)
+// chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+//   if (message && message.type === 'AUTH_COMPLETE') {
+//     console.log('AUTH_COMPLETE received via runtime messaging; reinitializing extension...');
+//     hasInitialized = false;
+//     startUp()
+//       .then(() => console.log('Extension reinitialized after authentication'))
+//       .catch((error) => console.error('Failed to reinitialize after authentication:', error))
+//       .finally(() => sendResponse({ received: true }));
+//     return true; // keep channel open for async sendResponse
+//   }
+// });
 
 console.log('BrowsEZ: Modern background script fully initialized');
 

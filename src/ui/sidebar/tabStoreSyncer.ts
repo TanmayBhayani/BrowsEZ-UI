@@ -67,6 +67,7 @@ const selectGenericSlice = (state: TabState) => [
   state.isContentScriptActive,
   state.htmlProcessingStatus,
   state.lastProcessedHTML,
+  state.lastError,
   state.searchState, // reference equality is enough – new object means change
 ];
 
@@ -117,7 +118,9 @@ export async function initTabStoreSync() {
       try {
         const { tabId, url } = store.getState();
         const response = await ApplicationMessenger.setActiveState(tabId, isActive, url);
-        if (!response.success) {
+        if (response.success) {
+          console.log('Syncer: Successfully pushed isActive toggle to background.');
+        } else {
           console.error('Syncer: Failed to push isActive toggle to background:', response.error);
         }
       } catch (e) {

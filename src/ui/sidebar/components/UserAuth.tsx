@@ -15,9 +15,9 @@ export const UserAuth: React.FC<UserAuthProps> = ({ onAuthChange }) => {
     checkAuthStatus();
   }, []);
 
-  const checkAuthStatus = async () => {
+  const checkAuthStatus = async (force: boolean = false) => {
     try {
-      const authStatus = await apiClient.checkAuth();
+      const authStatus = await apiClient.checkAuth(force);
       setUser(authStatus.user);
       setLoading(false);
       setLoginError(null);
@@ -43,7 +43,7 @@ export const UserAuth: React.FC<UserAuthProps> = ({ onAuthChange }) => {
       const checkInterval = setInterval(async () => {
         attempts++;
         try {
-          const authStatus = await apiClient.checkAuth();
+          const authStatus = await apiClient.checkAuth(true);
           if (authStatus.authenticated) {
             clearInterval(checkInterval);
             setUser(authStatus.user);
@@ -65,6 +65,25 @@ export const UserAuth: React.FC<UserAuthProps> = ({ onAuthChange }) => {
       setLoginError('Failed to start login process');
     }
   };
+
+  // Listen for AUTH_COMPLETE messages from callback page to refresh immediately
+  useEffect(() => {
+    const listener = (message: any) => {
+      if (message && message.type === 'AUTH_COMPLETE') {
+        // Force refresh auth on success
+        checkAuthStatus(true);
+      }
+    };
+    try {
+      chrome.runtime.onMessage.addListener(listener);
+      return () => {
+        chrome.runtime.onMessage.removeListener(listener);
+      };
+    } catch {
+      // ignore if not available
+      return () => {};
+    }
+  }, []);
 
   const handleLogout = async () => {
     try {

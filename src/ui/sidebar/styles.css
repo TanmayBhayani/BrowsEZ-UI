@@ -695,3 +695,39 @@
   outline: none;
   box-shadow: 0 0 0 3px var(--google-focus);
 }
+
+/* Error banner (shown below header) */
+.error-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin: 8px 12px 0 12px;
+  padding: 10px 12px;
+  background-color: #fdecea; /* light red */
+  border: 1px solid #f5c2c7; /* red border */
+  color: #842029; /* dark red text */
+  border-radius: 8px;
+}
+
+.error-banner .error-text {
+  flex: 1;
+  font-size: 14px;
+  line-height: 1.4;
+}
+
+.error-banner .error-dismiss {
+  border: none;
+  background: transparent;
+  color: #842029;
+  cursor: pointer;
+  font-size: 18px;
+  width: 28px;
+  height: 28px;
+  line-height: 24px;
+  border-radius: 50%;
+}
+
+.error-banner .error-dismiss:hover {
+  background: rgba(132, 32, 41, 0.08);
+}

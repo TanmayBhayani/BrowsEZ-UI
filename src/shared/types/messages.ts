@@ -83,6 +83,10 @@ export interface MessageSchema {
     payload: {};
     response: number | null;
   };
+  'AUTH_COMPLETE': {
+    payload: { success: boolean; error?: string };
+    response: {};
+  };
 }
 
 export type MessageType = keyof MessageSchema;

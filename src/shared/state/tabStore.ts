@@ -8,7 +8,7 @@ export interface TabActions {
   updateSearchState: (searchStateUpdates: Partial<SearchState>) => void;
   toggleActiveState: () => void;
   updateHTMLProcessingStatus: (status: 'not_sent' | 'processing' | 'ready' | 'error') => void;
-  updateBasicInfo: (updates: { url?: string; title?: string; isActive?: boolean; lastProcessedHTML?: string | null }) => void;
+  updateBasicInfo: (updates: { url?: string; title?: string; isActive?: boolean; lastProcessedHTML?: string | null; lastError?: { code: string; message: string } | null }) => void;
   updateSearchPosition: (position: number) => void;
   updateSearchResults: (results: SearchResult[]) => void;
   setConversation: (conversation: ConversationMessage[]) => void;
@@ -16,6 +16,7 @@ export interface TabActions {
   clearSearch: () => void;
   setSearchStatus: (status: 'idle' | 'searching' | 'showing_results' | 'error') => void;
   setLlmAnswer: (answer: string) => void;
+  clearError: () => void;
   // Potentially more actions specific to a single tab's lifecycle in the UI
 }
 
@@ -38,6 +39,7 @@ export const initialTabState: TabState = {
   isContentScriptActive: false,
   htmlProcessingStatus: 'not_sent',
   lastProcessedHTML: null,
+  lastError: null,
   searchState: initialSearchState,
 };
 
@@ -121,7 +123,9 @@ export const useTabStore = create<TabState & TabActions>()(
               ...state.searchState,
               llmAnswer: answer,
           }
-      }))
+      })),
+
+      clearError: () => set({ lastError: null })
     })),
     {
       name: 'tab-store',

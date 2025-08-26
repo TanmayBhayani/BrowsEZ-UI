@@ -1,9 +1,9 @@
 // API Client - Centralized API communication layer
 
 import { ConversationMessage } from '../types/extension';
-// const API_BASE_URL = 'https://find-production.up.railway.app';
+const API_BASE_URL = 'https://find-production.up.railway.app';
 
-const API_BASE_URL = 'http://localhost:5000';
+// const API_BASE_URL = 'http://localhost:5000';
 
 export interface SessionResponse {
   sessionId?: string;
@@ -243,18 +243,18 @@ class APIClient {
   /**
    * Check authentication status
    */
-  async checkAuth(): Promise<AuthStatus> {
+  async checkAuth(forceRefresh: boolean = false): Promise<AuthStatus> {
     // If we've already checked, return cached result
-    if (this.authChecked) {
+    if (!forceRefresh && this.authChecked) {
       return { authenticated: !!this.currentUser, user: this.currentUser };
     }
 
     // Deduplicate concurrent calls
-    if (this.authCheckPromise) {
+    if (!forceRefresh && this.authCheckPromise) {
       return this.authCheckPromise;
     }
 
-    this.authCheckPromise = (async () => {
+    const doFetch = async () => {
       try {
         const response = await fetch(`${this.baseUrl}/auth/user`, {
           method: 'GET',
@@ -273,6 +273,17 @@ class APIClient {
         this.authChecked = true;
         this.currentUser = null;
         return { authenticated: false, user: null };
+      }
+    };
+
+    if (forceRefresh) {
+      // Bypass promise dedupe and cached values
+      return doFetch();
+    }
+
+    this.authCheckPromise = (async () => {
+      try {
+        return await doFetch();
       } finally {
         this.authCheckPromise = null;
       }
@@ -303,8 +314,9 @@ class APIClient {
     
     this.loginInProgress = true;
     try {
-      // Open the login URL in a new tab
-      const loginUrl = `${this.baseUrl}/auth/login`;
+      // Open the login URL in a new tab, instructing backend to redirect back to extension callback
+      const callbackUrl = chrome.runtime.getURL('callback.html');
+      const loginUrl = `${this.baseUrl}/auth/login?return_to=${encodeURIComponent(callbackUrl)}`;
       chrome.tabs.create({ url: loginUrl });
       
       // Reset login flag after a delay
